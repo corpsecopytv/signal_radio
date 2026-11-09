@@ -78,6 +78,55 @@ RegisterNetEvent('pma-voice:radioListenerActivity', function(channel, active)
 	say(('Channel %d: ENC traffic %s, no talker identity sent.'):format(channel, active and 'started' or 'stopped'))
 end)
 
+-- Solo testing runs two clients on one PC. Only the focused window gets key presses,
+-- so /vp_tx holds the radio key on a timer while you switch to the other window.
+-- /vp_tx [seconds, default 10] [delay before keying, default 5]
+local transmitting = false
+RegisterCommand('vp_tx', function(_, args)
+	if transmitting then return say('A timed transmission is already running.') end
+	local seconds = math.max(1, math.min(60, tonumber(args[1]) or 10))
+	local delay = math.max(0, math.min(30, tonumber(args[2]) or 5))
+	transmitting = true
+	say(('Transmitting for %d seconds, starting in %d seconds.'):format(seconds, delay))
+	CreateThread(function()
+		Wait(delay * 1000)
+		ExecuteCommand('+radiotalk')
+		say('Radio key down.')
+		Wait(seconds * 1000)
+		ExecuteCommand('-radiotalk')
+		say('Radio key up.')
+		transmitting = false
+	end)
+end, false)
+
+-- Two fixed spots 150 metres apart, beyond every proximity range.
+local spots = {
+	a = { -1336.0, -3044.0, 20.0 },
+	b = { -1186.0, -3044.0, 20.0 },
+}
+
+-- /vp_spot <a|b|off>
+RegisterCommand('vp_spot', function(_, args)
+	local ped = PlayerPedId()
+	if args[1] == 'off' then
+		FreezeEntityPosition(ped, false)
+		return say('Released from the test spot.')
+	end
+	local spot = spots[args[1]]
+	if not spot then return say('Use a, b or off.') end
+	SetEntityCoordsNoOffset(ped, spot[1], spot[2], spot[3], false, false, false)
+	FreezeEntityPosition(ped, true)
+	say(('Moved to test spot %s and frozen in place.'):format(args[1]))
+end, false)
+
+-- /vp_call <call number, or 0 to leave>
+RegisterCommand('vp_call', function(_, args)
+	local call = tonumber(args[1])
+	if not call then return say('Give a call number, or 0 to leave.') end
+	pma:setCallChannel(call)
+	say(('Call set to %d.'):format(call))
+end, false)
+
 -- /vp_watch <talker server id> reports when Mumble marks that talker as talking.
 local watching = nil
 RegisterCommand('vp_watch', function(_, args)
