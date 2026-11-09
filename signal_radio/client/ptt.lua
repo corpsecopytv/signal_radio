@@ -7,12 +7,11 @@ local DENY_PULSE_MS = 150
 local denying = false
 local denied = false
 
---- @param reason string busy or no_signal
-function DenyTransmit(reason)
+function DenyTransmit()
 	if denying then return end
 	denying, denied = true, true
 	pma:addRadioDisableBit(DENY_BIT)
-	SendToHandset('denied', { reason = reason })
+	SendToHandset('denied')
 	SetTimeout(DENY_PULSE_MS, function()
 		pma:removeRadioDisableBit(DENY_BIT)
 		pma:refreshRadioAudio()
@@ -24,14 +23,18 @@ local function hasPriority()
 	return Radio.state.priority or GetGameTimer() < Radio.priorityUntil
 end
 
+--- A talker this radio cannot reach does not make the channel busy.
+local function isChannelBusy()
+	for talker in pairs(Radio.busy) do
+		if IsTalkerAudible(talker) then return true end
+	end
+	return false
+end
+
 AddEventHandler('pma-voice:radioActive', function(active)
-	Radio.transmitting = active
 	if active then
-		if HasNoSignal() then
-			return DenyTransmit('no_signal')
-		end
-		if next(Radio.busy) and not hasPriority() then
-			return DenyTransmit('busy')
+		if isChannelBusy() and not hasPriority() then
+			return DenyTransmit()
 		end
 		SendToHandset('tx', { active = true })
 	else
@@ -42,9 +45,9 @@ AddEventHandler('pma-voice:radioActive', function(active)
 	end
 end)
 
-RegisterNetEvent('signal_radio:txDenied', function(reason)
+RegisterNetEvent('signal_radio:txDenied', function()
 	SendToHandset('tx', { active = false })
-	DenyTransmit(reason or 'busy')
+	DenyTransmit()
 end)
 
 AddEventHandler('onResourceStop', function(resource)

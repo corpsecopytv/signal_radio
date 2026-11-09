@@ -20,10 +20,23 @@ Config.Signal = {
 	fullQuality = 0.35,
 	wornQuality = 0.15,
 	vehicleRangeBonus = 1.15,
+	-- Every radio also works like a small tower for other radios. Distances are in metres.
+	-- Direct quality uses the same rules as a tower, across directRange.
+	-- Inside nearClearRange the talker sounds clearest.
+	directRange = 500.0,
+	nearClearRange = 100.0,
 }
 
-Config.Jammer = {
-	installSeconds = 120,
+-- People near a receiving radio hear its speaker.
+Config.Bleed = {
+	range = 10.0,
+	maxVolume = 0.7,
+	minVolume = 0.05,
+	updateMs = 500,
+}
+
+Config.Sabotage = {
+	sabotageSeconds = 120,
 	offlineSeconds = 300,
 	cooldownSeconds = 1800,
 	interactDistance = 3.0,

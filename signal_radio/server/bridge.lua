@@ -19,8 +19,8 @@ function canUseRadio(_)
 	return true
 end
 
---- The jammer needs no item. Any player can walk up to a tower and start the install.
-function canUseJammer(_)
+--- Sabotage needs no item. Any player can walk up to a tower and start it.
+function canSabotage(_)
 	return true
 end
 

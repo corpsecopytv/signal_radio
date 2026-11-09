@@ -21,6 +21,7 @@ server_scripts {
 	'server/radio.lua',
 	'server/transmit.lua',
 	'server/towers.lua',
+	'server/bleed.lua',
 	'server/voice_proof.lua',
 }
 

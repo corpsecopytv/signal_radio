@@ -20,10 +20,6 @@ function IsOnSimplex()
 	return talkgroup ~= nil and talkgroup.simplex == true
 end
 
-function HasNoSignal()
-	return Radio.signal == 'none' and not IsOnSimplex()
-end
-
 --- @return string tier full, worn, bad or none
 function ComputeSignalTier(coords, inVehicle)
 	if #Radio.towers == 0 then return 'full' end
@@ -57,14 +53,11 @@ function UpdateRadioSignal()
 		Radio.signal = tier
 		TriggerServerEvent('signal_radio:signal', tier)
 		pma:refreshRadioAudio()
-		if Radio.transmitting and HasNoSignal() then
-			DenyTransmit('no_signal')
-		end
 	end
 	updateBars()
 
-	-- Simplex range depends on where people stand, so recheck it during traffic.
-	if IsOnSimplex() and next(Radio.busy) then
+	-- Direct radio and simplex range depend on where people stand, so recheck them during traffic.
+	if next(Radio.talkerSignal) then
 		pma:refreshRadioAudio()
 	end
 end

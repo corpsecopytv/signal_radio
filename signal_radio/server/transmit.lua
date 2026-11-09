@@ -41,9 +41,13 @@ function SendActiveTalkers(target, talkgroupId)
 	end
 end
 
-local function isSimplex(talkgroupId)
-	local talkgroup = TalkgroupsById[talkgroupId]
-	return talkgroup ~= nil and talkgroup.simplex == true
+--- Direct-only radios cannot be reached across the network, so they do not hold the channel.
+local function isChannelBusyFor(session, talkers)
+	if session.signal == 'none' then return false end
+	for talker in pairs(talkers) do
+		if Sessions[talker].signal ~= 'none' then return true end
+	end
+	return false
 end
 
 RegisterNetEvent('pma-voice:setTalkingOnRadio')
@@ -56,11 +60,8 @@ AddEventHandler('pma-voice:setTalkingOnRadio', function(talking)
 
 	if talking == true then
 		if talkers and talkers[source] then return end
-		if session.signal == 'none' and not isSimplex(talkgroupId) then
-			return TriggerClientEvent('signal_radio:txDenied', source, 'no_signal')
-		end
-		if talkers and not HasPriority(session) then
-			return TriggerClientEvent('signal_radio:txDenied', source, 'busy')
+		if talkers and isChannelBusyFor(session, talkers) and not HasPriority(session) then
+			return TriggerClientEvent('signal_radio:txDenied', source)
 		end
 		Talkers[talkgroupId] = talkers or {}
 		Talkers[talkgroupId][source] = true

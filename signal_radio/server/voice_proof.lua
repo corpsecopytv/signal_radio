@@ -58,6 +58,17 @@ register('vp_unlisten', function(src, args)
 	reply(src, ('Removed from channel %d: %s.'):format(channel, tostring(removed)))
 end)
 
+-- /vp_bleedtest <here|off>: places a stand-in receiving radio at your position.
+register('vp_bleedtest', function(src, args)
+	if args[1] == 'off' then
+		BleedTestRadio = nil
+		return reply(src, 'Removed the test radio.')
+	end
+	local coords = GetEntityCoords(GetPlayerPed(src))
+	BleedTestRadio = { x = coords.x, y = coords.y, z = coords.z }
+	reply(src, 'Placed a test radio at your position.')
+end)
+
 register('vp_state', function(src, args)
 	local channel = channelArg(src, args)
 	if not channel then return end

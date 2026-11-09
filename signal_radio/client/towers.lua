@@ -1,19 +1,19 @@
 local CANCEL_CONTROL = 73
 local INTERACT_CONTROL = 38
-local INSTALL_SCENARIO = 'WORLD_HUMAN_WELDING'
-local MAX_INSTALL_DRIFT = 1.5
+local SABOTAGE_SCENARIO = 'WORLD_HUMAN_WELDING'
+local MAX_SABOTAGE_DRIFT = 1.5
 local NEAR_TOWER_DISTANCE = 30.0
 
 local REFUSAL_TEXT = {
 	too_far = 'Move closer to the tower.',
-	already_jammed = 'This tower is already jammed.',
-	cooldown = 'This tower cannot be jammed again yet.',
-	in_use = 'Someone is already installing a jammer.',
-	interrupted = 'Jammer install stopped.',
+	already_sabotaged = 'This tower is already sabotaged.',
+	cooldown = 'This tower cannot be sabotaged again yet.',
+	in_use = 'Someone is already sabotaging this tower.',
+	interrupted = 'Sabotage stopped.',
 }
 
-local canJam = false
-local installing = false
+local canSabotageTower = false
+local sabotaging = false
 local debugBlips = {}
 local debugEnabled = false
 
@@ -47,9 +47,9 @@ local function drawDebugBlips()
 	end
 end
 
-RegisterNetEvent('signal_radio:towers', function(towers, allowedToJam)
+RegisterNetEvent('signal_radio:towers', function(towers, allowedToSabotage)
 	Radio.towers = towers
-	canJam = allowedToJam == true
+	canSabotageTower = allowedToSabotage == true
 	drawDebugBlips()
 	UpdateRadioSignal()
 end)
@@ -58,24 +58,24 @@ RegisterNetEvent('signal_radio:towerStatus', function(label, online)
 	SendToHandset('towerStatus', { label = label, online = online })
 end)
 
-RegisterNetEvent('signal_radio:jamRefused', function(reason)
-	installing = false
-	notify(REFUSAL_TEXT[reason] or 'Jammer install stopped.')
+RegisterNetEvent('signal_radio:sabotageRefused', function(reason)
+	sabotaging = false
+	notify(REFUSAL_TEXT[reason] or 'Sabotage stopped.')
 end)
 
-RegisterNetEvent('signal_radio:jamStarted', function(towerId, seconds)
-	installing = true
+RegisterNetEvent('signal_radio:sabotageStarted', function(towerId, seconds)
+	sabotaging = true
 	local ped = PlayerPedId()
 	local start = GetEntityCoords(ped)
 	local finishAt = GetGameTimer() + seconds * 1000
-	TaskStartScenarioInPlace(ped, INSTALL_SCENARIO, 0, true)
+	TaskStartScenarioInPlace(ped, SABOTAGE_SCENARIO, 0, true)
 
 	CreateThread(function()
 		local cancelled = false
-		while installing and GetGameTimer() < finishAt do
+		while sabotaging and GetGameTimer() < finishAt do
 			local remaining = math.ceil((finishAt - GetGameTimer()) / 1000)
-			showHelp(('Installing jammer: %d seconds left. Press ~INPUT_VEH_DUCK~ to cancel.'):format(remaining))
-			if IsControlJustPressed(0, CANCEL_CONTROL) or IsEntityDead(ped) or #(GetEntityCoords(ped) - start) > MAX_INSTALL_DRIFT then
+			showHelp(('Sabotaging tower: %d seconds left. Press ~INPUT_VEH_DUCK~ to cancel.'):format(remaining))
+			if IsControlJustPressed(0, CANCEL_CONTROL) or IsEntityDead(ped) or #(GetEntityCoords(ped) - start) > MAX_SABOTAGE_DRIFT then
 				cancelled = true
 				break
 			end
@@ -84,12 +84,12 @@ RegisterNetEvent('signal_radio:jamStarted', function(towerId, seconds)
 
 		ClearPedTasks(ped)
 		if cancelled then
-			installing = false
-			TriggerServerEvent('signal_radio:jamCancel')
-			notify('Jammer install stopped.')
-		elseif installing then
-			installing = false
-			TriggerServerEvent('signal_radio:jamFinish', towerId)
+			sabotaging = false
+			TriggerServerEvent('signal_radio:sabotageCancel')
+			notify('Sabotage stopped.')
+		elseif sabotaging then
+			sabotaging = false
+			TriggerServerEvent('signal_radio:sabotageFinish', towerId)
 		end
 	end)
 end)
@@ -109,17 +109,17 @@ end
 CreateThread(function()
 	while true do
 		local wait = 1000
-		if canJam and not installing then
+		if canSabotageTower and not sabotaging then
 			local coords = GetEntityCoords(PlayerPedId())
 			local tower, distance = nearestOnlineTower(coords)
 			if tower then
 				wait = 0
 				local found, groundZ = GetGroundZFor_3dCoord(tower.x, tower.y, coords.z + 5.0, false)
 				DrawMarker(1, tower.x, tower.y, (found and groundZ or coords.z - 1.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 0.6, 228, 96, 26, 140, false, false, 2, false, nil, nil, false)
-				if distance <= Config.Jammer.interactDistance then
-					showHelp(('Press ~INPUT_CONTEXT~ to install a jammer on %s.'):format(tower.label))
+				if distance <= Config.Sabotage.interactDistance then
+					showHelp(('Press ~INPUT_CONTEXT~ to sabotage %s.'):format(tower.label))
 					if IsControlJustPressed(0, INTERACT_CONTROL) then
-						TriggerServerEvent('signal_radio:jamStart', tower.id)
+						TriggerServerEvent('signal_radio:sabotageStart', tower.id)
 					end
 				end
 			end
@@ -137,6 +137,6 @@ end, false)
 AddEventHandler('onResourceStop', function(resource)
 	if resource == GetCurrentResourceName() then
 		clearDebugBlips()
-		if installing then ClearPedTasks(PlayerPedId()) end
+		if sabotaging then ClearPedTasks(PlayerPedId()) end
 	end
 end)

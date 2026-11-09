@@ -372,7 +372,12 @@ function render() {
 		$('channel').textContent = state.tuning ? tuned : (current ? current.label : '');
 		$('status').textContent = statusLine(index);
 	}
-	$('scanFlag').hidden = !(on && state.scanning && !state.tuning);
+	const statusInHeader = state.tuning && (app.tx || app.encrypted || activeReceive());
+	const showDirect = on && app.bars === 0 && !statusInHeader;
+	$('directFlag').hidden = !showDirect;
+	/* The square screen has room for one tag, and Direct matters more. */
+	const roomForScan = !showDirect || $('lcd').dataset.layout !== 'square';
+	$('scanFlag').hidden = !(on && state.scanning && !state.tuning && roomForScan);
 	if (app.open && !listing) fitChannelLabel();
 
 	const message = $('message');
@@ -538,9 +543,9 @@ const handlers = {
 	towerStatus(data) {
 		showMessage(`${data.label} tower ${data.online ? 'back online' : 'offline'}`, 3500);
 	},
-	denied(data) {
+	denied() {
 		tones.busy();
-		showMessage(data.reason === 'no_signal' ? 'No signal' : 'Channel busy');
+		showMessage('Channel busy');
 	},
 	panic(data) {
 		tones.panic();

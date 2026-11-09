@@ -7,7 +7,7 @@ The radio users are QPS, QAS, QFD, RFSQ and civilians. The radio connects to Nig
 
 The server framework is not confirmed. The radio does not depend on a framework. It reads duty and department data from Night Shifts MDT, which handles ESX, Qbox, QBCore or standalone by itself.
 
-First release: handheld radio, talkgroups and zones, permissions, civilian radios, encrypted talkgroups, panic, scan, towers that players can jam, signal-quality audio, and an in-game dispatch console.
+First release: handheld radio, talkgroups and zones, permissions, civilian radios, encrypted talkgroups, panic, scan, towers that players can sabotage, signal-quality audio, and an in-game dispatch console.
 
 Working resource name: `signal_radio`. The handsets use product photos of the Motorola APX 2000, Motorola APX 8000XE and Baofeng UV-5R with clickable zones, chosen for this private server. The handset generates its own tones. Replace the photos before any sale or public release.
 
@@ -42,7 +42,7 @@ resources/[radio]/signal_radio/
 
 Later steps add `web/dispatch/`, staff tools and optional GPS. `voice_proof` holds dev-only test commands. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
 
-No database. Config lives in Lua files. Callsigns, scan choices, the tower list and tower jam timers live in server KVP. Handset position and volume live in client KVP.
+No database. Config lives in Lua files. Callsigns, scan choices, the tower list and tower sabotage timers live in server KVP. Handset position and volume live in client KVP.
 
 ### Permissions
 - The codeplug comes from the Night Shifts department and rank, through `server/bridge.lua`. Until Night Shifts is connected, `/radio_dev` sets a dev profile on the dev server, and every other player gets a civilian radio.
@@ -51,7 +51,7 @@ No database. Config lives in Lua files. Callsigns, scan choices, the tower list 
 - Callsign uses `/callsign` and is saved in server KVP.
 - Duty comes from the Night Shifts shift state. Ending a shift in the MDT removes the player from restricted talkgroups.
 - `canUseRadio(source)` in `server/bridge.lua` returns true for every player. A player with no active shift gets the civilian radio (see Civilian use).
-- `canUseJammer(source)` in `server/bridge.lua` returns true. The jammer needs no item, and any player can start the install at a tower.
+- `canSabotage(source)` in `server/bridge.lua` returns true. Sabotage needs no item, and any player can start it at a tower.
 
 ### pma-voice patch (2 additions, kept minimal)
 1. **Listen-only channels.** New server exports `addRadioListener(source, channel, withAudio)` and `removeRadioListener(source, channel)`. When `withAudio` is true, the listener gets talk events and the talker adds the listener through `addVoiceTargets`. When `withAudio` is false, the listener gets talk events only, and the talker does not add the listener as a voice target. `signal_radio` sets `withAudio` to false for keyless listeners on encrypted talkgroups.
@@ -68,8 +68,8 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 - **Emergency talkgroups:** Every emergency talkgroup is encrypted. Emergency radios hold one shared key, and can switch between each other's talkgroups to communicate. Command talkgroups stay senior-only.
 - **No scanners:** Civilians have no scan or scanner access. Scan is for emergency radios only.
 - **Why encryption exists:** Every civilian can own a radio. Emergency services need traffic that a civilian radio cannot hear.
-- **What a civilian gets on an emergency frequency:** Each emergency talkgroup has a frequency in `config/talkgroups.lua`. A civilian who tunes to one hears only noise during traffic. The handset shows "ENC" and hides the talker. The civilian cannot transmit there. The server sends a keyless player no voice.
-- **Signal and jammers:** Signal tiers and jammers affect civilian radios too.
+- **What a civilian gets on an emergency frequency:** Each emergency talkgroup has a frequency in `config/talkgroups.lua`. A civilian who tunes to one hears only noise during traffic. The handset shows "ENC" and hides the talker. The civilian cannot transmit there. The server sends a keyless radio no voice. A civilian standing beside an emergency radio can still overhear it through speaker bleed.
+- **Signal and sabotage:** Signal tiers, tower sabotage and direct radio affect civilian radios too.
 - **Panic:** The radio type decides whether a radio has a panic button. A radio type without an emergency button has no panic.
 - **Other limits:** Civilians have no dispatch access, because the console needs `radio.dispatch`.
 - **Handset:** Civilian radios use the Baofeng UV-5R skin. It has no emergency button, so civilian radios have no panic.
@@ -86,14 +86,33 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 
 ## Feature design
 - **Talkgroups:** Per-department talkgroups for QPS, QAS, QFD and RFSQ. One interop talkgroup for all four departments. One command talkgroup for senior ranks per department. All are encrypted with one shared key, and every emergency radio can switch between the departments' talkgroups.
-- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. The binding also works while the radio is open, because the handset uses `SetNuiFocusKeepInput` and blocks other game controls. Other resources' key bindings can also fire while it is open. The handset's side button also transmits. `addRadioDisableBit` cuts a transmission when the channel is busy or the radio has no signal, as a short pulse.
+- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. The binding also works while the radio is open, because the handset uses `SetNuiFocusKeepInput` and blocks other game controls. Other resources' key bindings can also fire while it is open. The handset's side button also transmits. `addRadioDisableBit` cuts a transmission when the channel is busy, as a short pulse. A radio with no tower signal can still transmit, and only radios in direct range hear it.
 - **Half-duplex:** The server tracks each channel's active talker. Clients block locally and play a busy tone. If two key up together, the server keeps the first and the loser is cut off. `radio.priority` overrides the block.
 - **Scan:** Each player chooses what their radio scans, from any talkgroup their radio can use. The codeplug sets the starting list. The server validates each choice and saves it per player and department. The Scan key opens a list with an on or off row, then every talkgroup with a tick. Primary channel transmits. Scanned channels are heard through listeners at 60% volume, all at once. Scan starts off after a reconnect.
-- **Signal:** Client computes the best tower every 1.5 seconds, using distance, jam state and a vehicle bonus. It sends only tier changes (full, worn, bad, none) to the server, which passes the talker's tier to receivers with each transmission. With no towers configured, every radio has full signal.
-- **Signal audio:** Three custom submixes. The receiver uses the worse of talker and own tier. Tier none mutes receive and blocks transmit. Dispatch consoles ignore signal.
-- **Towers:** Replicated from the server. `/radio_tower` adds, removes, resizes, clears and lists towers, and needs `radio.admin`. `/radio_tower_debug` shows each radius on the map. `config/towers.lua` holds nine placeholder sites. TODO: replace them with real sites. Place towers so coverage overlaps. One jammed tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
-- **Jammer:** The jammer needs no item. Any player can walk up to a tower and press E at its marker. The player then stays in an animation for 120 seconds before the jammer takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the install, and no cooldown starts. Only one player can install on a tower at a time. Once the jammer takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be jammed again for 30 minutes, counted from when the jammer took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a jam. Every jam is logged (who, which tower, when) and sends an alert to online staff.
-- **Fireground channel:** One short-range simplex talkgroup in the RFSQ zone, with a 500 metre range set in `config/talkgroups.lua`. It works without a tower and ignores signal tiers. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance. A talker outside the receiver's OneSync scope counts as out of range.
+- **Signal:** Client computes the best tower every 1.5 seconds, using distance, sabotage state and a vehicle bonus. It sends only tier changes (full, worn, bad, none) to the server, which passes the talker's tier to receivers with each transmission. With no towers configured, every radio has full signal.
+- **Signal audio:** Five custom submixes: near, full, worn, bad and bleed. The tower path uses the worse of the talker's and receiver's tower tiers. Dispatch consoles ignore signal.
+- **Direct radio:** Every radio also works like a small tower for other radios on the same talkgroup or frequency. Direct range is 500 metres, the same as the fireground channel, set in `config/towers.lua`. It uses the same quality rules as a tower: 1.0 beside the talker, 0.0 at the edge of the range.
+  - A receiver uses whichever path is better, tower or direct.
+  - Within 100 metres, the talker uses the clearest audio.
+  - With neither path, the receiver hears nothing.
+  - A radio with no tower signal shows 0 bars and "Direct". It can still transmit and receive within direct range.
+  - Sabotage takes a tower offline, but does not stop direct radio.
+  - Direct radio applies to emergency and civilian radios, in zone mode and frequency mode.
+  - A talker on direct radio only does not make the channel busy for radios that cannot hear them. The game streams players up to about 424 metres away, so the server supplies the distance beyond 300 metres.
+- **Speaker bleed:** People close to a radio can hear its speaker while it receives traffic.
+  - The bleed range is 10 metres, set in `config/towers.lua`. Volume falls with distance from the nearest radio that is receiving.
+  - Audio uses a muffled submix, so it sounds like a nearby speaker.
+  - A radio only bleeds what it can receive. A radio that is off, or out of range of the talker, does not bleed.
+  - A radio does not bleed while it is the one transmitting.
+  - Scanned traffic bleeds too.
+  - A player who already hears that talkgroup on their own radio does not hear it twice.
+  - A radio tuned to that encrypted frequency stays on noise only. pma-voice allows one listen state per channel.
+  - No pma-voice change is needed. During traffic, the server adds nearby players as audio listeners on the channel, and removes them when they move away or the traffic ends.
+  - Mumble plays the voice from the talker, not from the radio. Volume and muffling stand in for the radio's position.
+  - Speaker bleed includes encrypted talkgroups, because the receiving radio has already decoded the audio. Anyone beside that radio can overhear it.
+- **Towers:** Replicated from the server. `/radio_tower` adds, removes, resizes, clears and lists towers, and needs `radio.admin`. `/radio_tower_debug` shows each radius on the map. `config/towers.lua` holds nine placeholder sites. TODO: replace them with real sites. Place towers so coverage overlaps. One sabotaged tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
+- **Sabotage:** Sabotage needs no item. Any player can walk up to a tower and press E at its marker. The player then stays in an animation for 120 seconds before the sabotage takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the sabotage, and no cooldown starts. Only one player can sabotage a tower at a time. Once the sabotage takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be sabotaged again for 30 minutes, counted from when the sabotage took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a sabotage. Every sabotage is logged (who, which tower, when) and sends an alert to online staff.
+- **Fireground channel:** One short-range simplex talkgroup in the RFSQ zone, with a 500 metre range set in `config/talkgroups.lua`. It works without a tower and ignores signal tiers. It has the same 500 metre range as direct radio, but keeps full quality across that range. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance, using the server's distance beyond the game's streaming range.
 - **Emergency:** Panic with cooldown, tone on the talkgroup and priority for the sender. Man-down alert after a configurable delay.
   - Radio panic also triggers the Night Shifts panic for that player, so the marker shows on the MDT map. TODO: confirm that the panic command can run for a given player from another resource.
   - Night Shifts panic fires the `signal_radio` hook event, so the radio plays the panic tone and gives the sender priority.
@@ -112,10 +131,10 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - When a talker on the talkgroup keys up, the keyless client plays a looping "encrypted" noise, generated in the handset. The loop stops when the talker stops.
   - The keyless handset shows "ENC" and does not show the talker's callsign or name.
   - Keyless players cannot transmit on an encrypted talkgroup.
-  - Signal tiers still apply. Tier none stops the noise loop too.
+  - Signal tiers still apply. Tier none stops the noise loop too, because a keyless radio gets no talker position to use direct radio.
   - Do not use a distortion submix for this. A submix still sends the real voice to the client, and a modified client can remove the submix.
   - Use case: a civilian who tunes to an emergency frequency hears only noise.
-- **Tones:** The handset generates its tones for grant, release, busy, power, receive and panic. A no-signal block uses the busy tone. pma mic clicks set to 0 so sounds don't double up.
+- **Tones:** The handset generates its tones for grant, release, busy, power, receive and panic. pma mic clicks set to 0 so sounds don't double up.
 
 ## Server config
 ```
@@ -135,8 +154,9 @@ OneSync must be on. The dev server also uses `setr signal_radio_dev_profiles 1` 
 4. **Night Shifts integration and emergency:** Shift-based access, panic sync both ways, man-down calls.
 5. **Scan, civilian radios and encryption:** Listeners, scan lists, civilian codeplugs, encrypted talkgroups and the noise loop.
 6. **Dispatch console:** Monitoring, patching, tone-outs, unit moves, log.
-7. **Towers:** Signal tiers, submix tuning, jammer, saved timers, fireground simplex channel.
-8. **Hardening:** Rate limits, player-drop and resource-restart cleanup, staff tools, load test.
+7. **Towers:** Signal tiers, submix tuning, sabotage, saved timers, fireground simplex channel.
+8. **Direct radio and speaker bleed:** Radio-to-radio range, the Direct indicator, bleed listeners and the muffled submix.
+9. **Hardening:** Rate limits, player-drop and resource-restart cleanup, staff tools, load test.
 
 ## Build status
 Status at 2026-11-10.
@@ -149,23 +169,27 @@ Status at 2026-11-10.
 | 4. Night Shifts integration and emergency | Radio-side panic is built. The rest needs the Night Shifts export names. |
 | 5. Scan, civilian radios and encryption | Working in-game. Spectator mode is still open. |
 | 6. Dispatch console | Not started. |
-| 7. Towers | Built ahead of steps 4 and 6. Waiting on the in-game test in `docs/test_towers.md`. |
-| 8. Hardening | Not started. |
+| 7. Towers | Working in-game. Built ahead of steps 4 and 6. |
+| 8. Direct radio and speaker bleed | Built. Waiting on the in-game test in `docs/test_towers.md`. |
+| 9. Hardening | Not started. |
 
 Emergency frequency mode, all-zone access and chosen scan lists are built as part of steps 2, 3 and 5. The in-game test for this build is `docs/test_core_radio.md`.
 
 ## Out of this release
-Battery, text messaging, voice bleed to bystanders, browser dispatch, other CAD or MDT systems, and talkaround when all towers are down. The RFSQ fireground channel is the one exception to the talkaround limit. Voice bleed is left out because Mumble audio plays from the talker's position, not from the receiving radio.
+Battery, text messaging, browser dispatch and other CAD or MDT systems.
 
 ## Risks
 - **pma-voice updates:** The patch must be reapplied. Keeping it in one patch file makes that a small job.
 - **GTA V Enhanced:** FiveM's docs say Mumble is deprecated there, and pma-voice is built on Mumble. This plan targets the standard FiveM build.
-- **Security limit:** Server checks stop rule-breaking through events, but a modified client can still touch Mumble targets directly. Treat talkgroup access limits as roleplay rules, not real secrecy. Keyless listeners on encrypted talkgroups get no voice path, and the verification steps check this.
+- **Security limit:** Server checks stop rule-breaking through events, but a modified client can still touch Mumble targets directly. Treat talkgroup access limits as roleplay rules, not real secrecy. Keyless radios on encrypted talkgroups get no voice path, and the verification steps check this.
 - **Submix tuning:** Effect values need listening tests with real voices.
+- **Speaker bleed position:** Bleed cannot play from the radio's real position. It may sound flat, or wrong when the talker is also close by.
+- **Speaker bleed load:** The server checks positions around every receiving radio during traffic. Measure this in the load test.
+- **Speaker bleed and encryption:** Bleed includes encrypted talkgroups, so a civilian within 10 metres of an emergency radio can hear that traffic. This is intended.
 - **Night Shifts updates:** An update can overwrite the hook in its function file. Reapply it from `patches/night_shifts_hook.md`.
 - **Night Shifts exports:** Export names and parameters are not confirmed yet. Confirm them in the docs before step 4 of the build order.
 - **pma-voice version:** Pin the pma-voice version that the patch targets. Name who reapplies the patch after an update.
-- **Jammer balance:** At about 20 players a night, a jam can stop all emergency comms in a zone. Tune the jam time and tower overlap in play tests.
+- **Sabotage balance:** At about 20 players a night, a sabotage can stop long-range emergency comms in a zone. Direct radio still works up close. Tune the sabotage time and tower overlap in play tests.
 
 ## Verification
 Static checks can run during the build: Lua syntax, and NUI in a browser with mock data. Audio and networking need a real server. One person can run most tests with two clients on one PC, using the steps in `docs/test_core_radio.md`. Overlap and load tests need more real players.
@@ -173,9 +197,9 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - Talker A on a channel is heard by B on the same channel, not by C elsewhere.
 - C scanning that channel hears A but cannot transmit on it.
 - Two players keying together: one transmits and the other gets the busy tone. `radio.priority` overrides.
-- Walking from a tower moves through tiers with audible change, then cuts out. Jamming a tower cuts its coverage for 5 minutes, then it recovers by itself.
-- The jammer takes effect only after the full 120-second animation. Moving away, dying or cancelling stops it, the tower stays online, and no cooldown starts. A forged completion event before 120 seconds is refused.
-- A second jam on that tower is refused until 30 minutes after the first took effect. Other towers can still be jammed. A restart during either timer does not reset it.
+- Walking from a tower moves through tiers with audible change, then loses tower signal. Sabotaging a tower cuts its coverage for 5 minutes, then it recovers by itself.
+- Sabotage takes effect only after the full 120-second animation. Moving away, dying or cancelling stops it, the tower stays online, and no cooldown starts. A forged completion event before 120 seconds is refused.
+- A second sabotage on that tower is refused until 30 minutes after the first took effect. Other towers can still be sabotaged. A restart during either timer does not reset it.
 - A player whose codeplug does not include a talkgroup cannot join it, including by triggering `pma-voice:setPlayerRadio` directly.
 - Panic reaches authorised units and dispatch, and respects the cooldown.
 - Dispatch patch: both groups hear each other, and unpatching restores members.
@@ -185,7 +209,7 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - The department and rank from Night Shifts give the correct codeplug.
 - Radio panic shows a marker on the Night Shifts map. MDT panic plays the panic tone on the radio.
 - Man-down creates a call in the MDT.
-- Jamming one tower leaves some coverage from an overlapping tower. Staff get a jam alert.
+- Sabotaging one tower leaves some coverage from an overlapping tower. Staff get a sabotage alert.
 - On the fireground channel, players within range hear each other with no tower, and players out of range do not.
 - Staff commands clear a stuck talker and remove a player from a channel.
 - On an encrypted talkgroup, a player with the key hears clear audio. A player without the key hears only the noise loop, sees "ENC" with no talker name, and cannot transmit.
@@ -205,6 +229,15 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - Choosing a zone returns an emergency radio from frequency mode, and scan resumes.
 - An emergency radio from one department can switch to another department's talkgroup and hear it clearly.
 - A radio type without an emergency button cannot send a panic.
+- Two radios with no tower signal can talk within 500 metres, with quality falling as they separate. They cannot talk past 500 metres.
+- A radio with tower signal uses direct radio when it sounds better than the tower path.
+- A radio with no tower signal shows 0 bars and "Direct".
+- Direct radio works while a tower is sabotaged, for emergency and civilian radios.
+- A player within 10 metres of a receiving radio hears muffled speaker audio. It fades with distance and stops past 10 metres.
+- A civilian within 10 metres of an emergency radio hears encrypted traffic through speaker bleed, but still hears only noise on their own radio.
+- A radio that is off, transmitting, or out of range of the talker does not bleed.
+- A player already on the talkgroup does not hear bleed as well.
+- Bleed listeners are removed when the traffic ends, when the player walks away, and when the resource restarts.
 
 ## Findings from build step 1
 These come from the pma-voice 7.0.1 source. They correct or add to the sections above.

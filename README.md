@@ -9,7 +9,7 @@ The full design and build status are in [docs/plan.md](docs/plan.md). Step 1, th
 - `patches/signal_radio.patch` is the patch for pma-voice 7.0.1.
 - `docs/voice_proof.md` is the step 1 test script.
 - `docs/test_core_radio.md` is the test script for the core radio and handsets.
-- `docs/test_towers.md` is the test script for towers, signal, the jammer and the fireground channel.
+- `docs/test_towers.md` is the test script for towers, signal, sabotage, the fireground channel, direct radio and speaker bleed.
 
 pma-voice, Night Shifts MDT and `server.cfg` are never committed to this repo.
 

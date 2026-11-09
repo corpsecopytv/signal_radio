@@ -1,22 +1,22 @@
 local TOWER_LIST_KEY = 'towers:list'
 
 local towers = {}
-local jams = {}
--- installs[towerId] = { source = player, started = os.time() }
-local installs = {}
+local sabotages = {}
+-- attempts[towerId] = { source = player, started = os.time() }
+local attempts = {}
 
-local function jamKey(id)
-	return ('tower:%s:jam'):format(id)
+local function sabotageKey(id)
+	return ('tower:%s:sabotage'):format(id)
 end
 
-local function loadJam(id)
-	local saved = GetResourceKvpString(jamKey(id))
-	local jammedUntil, cooldownUntil = (saved or ''):match('^(%d+),(%d+)$')
-	jams[id] = { jammedUntil = tonumber(jammedUntil) or 0, cooldownUntil = tonumber(cooldownUntil) or 0 }
+local function loadSabotage(id)
+	local saved = GetResourceKvpString(sabotageKey(id))
+	local sabotagedUntil, cooldownUntil = (saved or ''):match('^(%d+),(%d+)$')
+	sabotages[id] = { sabotagedUntil = tonumber(sabotagedUntil) or 0, cooldownUntil = tonumber(cooldownUntil) or 0 }
 end
 
-local function saveJam(id)
-	SetResourceKvp(jamKey(id), ('%d,%d'):format(jams[id].jammedUntil, jams[id].cooldownUntil))
+local function saveSabotage(id)
+	SetResourceKvp(sabotageKey(id), ('%d,%d'):format(sabotages[id].sabotagedUntil, sabotages[id].cooldownUntil))
 end
 
 local function saveTowers()
@@ -30,8 +30,8 @@ local function findTower(id)
 	return nil
 end
 
-local function isJammed(id)
-	return jams[id].jammedUntil > os.time()
+local function isSabotaged(id)
+	return sabotages[id].sabotagedUntil > os.time()
 end
 
 local function towerPayload(source)
@@ -44,10 +44,10 @@ local function towerPayload(source)
 			y = tower.y,
 			z = tower.z,
 			radius = tower.radius,
-			online = not isJammed(tower.id),
+			online = not isSabotaged(tower.id),
 		}
 	end
-	return list, canUseJammer(source)
+	return list, canSabotage(source)
 end
 
 local function sendTowers(source)
@@ -83,21 +83,21 @@ local function playerAtTower(source, tower)
 	local coords = GetEntityCoords(ped)
 	-- Height is ignored, so placeholder tower heights still work.
 	local dx, dy = coords.x - tower.x, coords.y - tower.y
-	return math.sqrt(dx * dx + dy * dy) <= Config.Jammer.interactDistance + 1.0
+	return math.sqrt(dx * dx + dy * dy) <= Config.Sabotage.interactDistance + 1.0
 end
 
-local function cancelInstall(towerId, reason)
-	local install = installs[towerId]
-	if not install then return end
-	installs[towerId] = nil
+local function cancelAttempt(towerId, reason)
+	local attempt = attempts[towerId]
+	if not attempt then return end
+	attempts[towerId] = nil
 	if reason then
-		TriggerClientEvent('signal_radio:jamRefused', install.source, reason)
+		TriggerClientEvent('signal_radio:sabotageRefused', attempt.source, reason)
 	end
 end
 
-local function installOf(source)
-	for towerId, install in pairs(installs) do
-		if install.source == source then return towerId end
+local function attemptOf(source)
+	for towerId, attempt in pairs(attempts) do
+		if attempt.source == source then return towerId end
 	end
 	return nil
 end
@@ -106,76 +106,76 @@ RegisterNetEvent('signal_radio:hello', function()
 	sendTowers(source)
 end)
 
-RegisterNetEvent('signal_radio:jamStart', function(towerId)
+RegisterNetEvent('signal_radio:sabotageStart', function(towerId)
 	local source = source
 	local tower = type(towerId) == 'string' and findTower(towerId) or nil
 	if not tower then return end
-	if not canUseJammer(source) then
-		return TriggerClientEvent('signal_radio:jamRefused', source, 'no_jammer')
+	if not canSabotage(source) then
+		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'not_allowed')
 	end
 	if not playerAtTower(source, tower) then
-		return TriggerClientEvent('signal_radio:jamRefused', source, 'too_far')
+		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'too_far')
 	end
-	if isJammed(towerId) then
-		return TriggerClientEvent('signal_radio:jamRefused', source, 'already_jammed')
+	if isSabotaged(towerId) then
+		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'already_sabotaged')
 	end
-	if jams[towerId].cooldownUntil > os.time() then
-		return TriggerClientEvent('signal_radio:jamRefused', source, 'cooldown')
+	if sabotages[towerId].cooldownUntil > os.time() then
+		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'cooldown')
 	end
-	if installs[towerId] or installOf(source) then
-		return TriggerClientEvent('signal_radio:jamRefused', source, 'in_use')
+	if attempts[towerId] or attemptOf(source) then
+		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'in_use')
 	end
-	installs[towerId] = { source = source, started = os.time() }
-	TriggerClientEvent('signal_radio:jamStarted', source, towerId, Config.Jammer.installSeconds)
+	attempts[towerId] = { source = source, started = os.time() }
+	TriggerClientEvent('signal_radio:sabotageStarted', source, towerId, Config.Sabotage.sabotageSeconds)
 end)
 
-RegisterNetEvent('signal_radio:jamCancel', function()
-	local towerId = installOf(source)
-	if towerId then cancelInstall(towerId) end
+RegisterNetEvent('signal_radio:sabotageCancel', function()
+	local towerId = attemptOf(source)
+	if towerId then cancelAttempt(towerId) end
 end)
 
-RegisterNetEvent('signal_radio:jamFinish', function(towerId)
+RegisterNetEvent('signal_radio:sabotageFinish', function(towerId)
 	local source = source
-	local install = type(towerId) == 'string' and installs[towerId] or nil
-	if not install or install.source ~= source then return end
+	local attempt = type(towerId) == 'string' and attempts[towerId] or nil
+	if not attempt or attempt.source ~= source then return end
 	local tower = findTower(towerId)
-	local elapsed = os.time() - install.started
+	local elapsed = os.time() - attempt.started
 	local ped = GetPlayerPed(source)
-	if elapsed < Config.Jammer.installSeconds or not playerAtTower(source, tower) or GetEntityHealth(ped) <= 0 then
-		return cancelInstall(towerId, 'interrupted')
+	if elapsed < Config.Sabotage.sabotageSeconds or not playerAtTower(source, tower) or GetEntityHealth(ped) <= 0 then
+		return cancelAttempt(towerId, 'interrupted')
 	end
-	installs[towerId] = nil
+	attempts[towerId] = nil
 
 	local now = os.time()
-	jams[towerId].jammedUntil = now + Config.Jammer.offlineSeconds
-	jams[towerId].cooldownUntil = now + Config.Jammer.cooldownSeconds
-	saveJam(towerId)
-	alertStaff(('%s (id %d) jammed tower %s (%s).'):format(GetPlayerName(source), source, tower.label, tower.id))
+	sabotages[towerId].sabotagedUntil = now + Config.Sabotage.offlineSeconds
+	sabotages[towerId].cooldownUntil = now + Config.Sabotage.cooldownSeconds
+	saveSabotage(towerId)
+	alertStaff(('%s (id %d) sabotaged tower %s (%s).'):format(GetPlayerName(source), source, tower.label, tower.id))
 	broadcastTowers()
 	announceTower(tower, false)
 end)
 
---- Ends finished jams and cancels installs whose player left the tower.
+--- Ends finished sabotage and cancels attempts whose player left the tower.
 function TickTowers()
 	local now = os.time()
 	for _, tower in ipairs(towers) do
-		local jam = jams[tower.id]
-		if jam.jammedUntil > 0 and jam.jammedUntil <= now then
-			jam.jammedUntil = 0
-			saveJam(tower.id)
+		local sabotage = sabotages[tower.id]
+		if sabotage.sabotagedUntil > 0 and sabotage.sabotagedUntil <= now then
+			sabotage.sabotagedUntil = 0
+			saveSabotage(tower.id)
 			broadcastTowers()
 			announceTower(tower, true)
 		end
-		local install = installs[tower.id]
-		if install and not playerAtTower(install.source, tower) then
-			cancelInstall(tower.id, 'interrupted')
+		local attempt = attempts[tower.id]
+		if attempt and not playerAtTower(attempt.source, tower) then
+			cancelAttempt(tower.id, 'interrupted')
 		end
 	end
 end
 
 AddEventHandler('playerDropped', function()
-	local towerId = installOf(source)
-	if towerId then cancelInstall(towerId) end
+	local towerId = attemptOf(source)
+	if towerId then cancelAttempt(towerId) end
 end)
 
 local commands = {}
@@ -188,7 +188,7 @@ function commands.add(source, args)
 	end
 	local coords = GetEntityCoords(GetPlayerPed(source))
 	towers[#towers + 1] = { id = id, label = id, x = coords.x, y = coords.y, z = coords.z, radius = radius + 0.0 }
-	loadJam(id)
+	loadSabotage(id)
 	saveTowers()
 	broadcastTowers()
 	return ('Added tower %s with radius %d.'):format(id, radius)
@@ -199,8 +199,8 @@ function commands.remove(_, args)
 	if not index then return 'That tower does not exist.' end
 	local id = args[2]
 	table.remove(towers, index)
-	jams[id] = nil
-	installs[id] = nil
+	sabotages[id] = nil
+	attempts[id] = nil
 	saveTowers()
 	broadcastTowers()
 	return ('Removed tower %s.'):format(id)
@@ -219,21 +219,21 @@ end
 function commands.clear(_, args)
 	local tower = findTower(args[2])
 	if not tower then return 'That tower does not exist.' end
-	jams[tower.id] = { jammedUntil = 0, cooldownUntil = 0 }
-	saveJam(tower.id)
+	sabotages[tower.id] = { sabotagedUntil = 0, cooldownUntil = 0 }
+	saveSabotage(tower.id)
 	broadcastTowers()
 	announceTower(tower, true)
-	return ('Cleared the jam and cooldown on %s.'):format(tower.id)
+	return ('Cleared the sabotage and cooldown on %s.'):format(tower.id)
 end
 
 function commands.list()
 	local parts = {}
 	local now = os.time()
 	for _, tower in ipairs(towers) do
-		local jam = jams[tower.id]
-		local status = jam.jammedUntil > now and ('jammed %ds'):format(jam.jammedUntil - now) or 'online'
-		if jam.cooldownUntil > now then
-			status = ('%s, cooldown %ds'):format(status, jam.cooldownUntil - now)
+		local sabotage = sabotages[tower.id]
+		local status = sabotage.sabotagedUntil > now and ('sabotaged %ds'):format(sabotage.sabotagedUntil - now) or 'online'
+		if sabotage.cooldownUntil > now then
+			status = ('%s, cooldown %ds'):format(status, sabotage.cooldownUntil - now)
 		end
 		parts[#parts + 1] = ('%s (%s)'):format(tower.id, status)
 	end
@@ -255,7 +255,7 @@ do
 	local saved = GetResourceKvpString(TOWER_LIST_KEY)
 	towers = saved and json.decode(saved) or Config.Towers
 	for _, tower in ipairs(towers) do
-		loadJam(tower.id)
+		loadSabotage(tower.id)
 	end
 end
 

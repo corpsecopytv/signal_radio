@@ -8,7 +8,7 @@ You need a headset with a microphone. Allow about 60 minutes.
 
 ## What this run does not cover
 - Night Shifts MDT and the dispatch console. These are not built yet.
-- Towers, signal quality and jammers. `docs/test_towers.md` covers these.
+- Towers, signal quality and sabotage. `docs/test_towers.md` covers these.
 - Overlapping talkers from three or more players, and the load test. These need real players.
 - The `radio.priority` ACE. Test 5 proves priority through panic instead.
 - Spectator mode hearing encrypted voice. This is a known open gap.

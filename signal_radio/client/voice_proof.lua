@@ -131,7 +131,7 @@ RegisterCommand('vp_goto', function(_, args)
 	say(('Moved to %d, %d and frozen. /vp_spot off releases you.'):format(x, y))
 end, false)
 
--- /vp_tower <id>: stands you on the ground beside a tower, for jammer tests.
+-- /vp_tower <id>: stands you on the ground beside a tower, for sabotage tests.
 RegisterCommand('vp_tower', function(_, args)
 	local tower
 	for _, candidate in ipairs(Radio.towers) do

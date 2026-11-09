@@ -7,7 +7,8 @@ Radio = {
 	towers = {},
 	signal = 'full',
 	talkerSignal = {},
-	transmitting = false,
+	talkerDistance = {},
+	bleed = {},
 	priorityUntil = 0,
 	pressingUiPtt = false,
 }
@@ -84,8 +85,18 @@ RegisterNetEvent('signal_radio:talk', function(talkgroup, talker, callsign, talk
 		Radio.busy[talker] = talking or nil
 	end
 	Radio.talkerSignal[talker] = talking and signal or nil
+	if not talking then Radio.talkerDistance[talker] = nil end
 	if talking then pma:refreshRadioAudio() end
 	SendToHandset('talk', { talkgroup = talkgroup, talker = talker, callsign = callsign, talking = talking })
+end)
+
+RegisterNetEvent('signal_radio:talkerDistance', function(talker, distance)
+	Radio.talkerDistance[talker] = distance
+end)
+
+RegisterNetEvent('signal_radio:bleed', function(channel, volume)
+	Radio.bleed[channel] = volume
+	pma:refreshRadioAudio()
 end)
 
 RegisterNetEvent('signal_radio:panic', function(talkgroup, label, callsign, sender)
