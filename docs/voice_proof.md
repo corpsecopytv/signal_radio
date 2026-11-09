@@ -43,7 +43,7 @@ If the second client gets "account is already being used", stop here. You then n
 ## Commands
 | Command | What it does |
 | --- | --- |
-| `/vp_spot <a, b, off>` | Moves you to a test spot and freezes you, or releases you. |
+| `/vp_spot <a, b, c, off>` | Moves you to a test spot and freezes you, or releases you. Spot c is 3 metres from spot a. |
 | `/vp_join <channel>` | Joins a channel as a normal member. |
 | `/vp_leave` | Leaves the radio. |
 | `/vp_listen <channel> 1` | Listens with audio. |
@@ -72,46 +72,49 @@ If you can only hear the focused client, use `/vp_watch` for the pass or fail, a
 First, A runs `/vp_spot a`, and B runs `/vp_spot b`. The spots are 150 metres apart, so proximity voice does not affect the results.
 
 ### 1. Normal channels
-- A and B run `/vp_join 1001`.
-- A runs `/vp_state 1001`, and notes both server ids.
+- A and B run `/vp_join 9001`.
+- A runs `/vp_state 9001`, and notes both server ids.
 - B runs `/vp_watch <A id>`. A transmits.
 - Pass: B shows `VOICE ARRIVING`, and you hear the radio effect.
-- B runs `/vp_join 1002`. A transmits.
+- B runs `/vp_join 9002`. A transmits.
 - Pass: B stays silent.
 
 ### 2. Listen with audio
-- B stays on 1002 and runs `/vp_listen 1001 1`. A transmits.
+- B stays on 9002 and runs `/vp_listen 9001 1`. A transmits.
 - Pass: B shows `VOICE ARRIVING`.
 - A runs `/vp_watch <B id>`. B transmits.
-- Pass: A stays silent, because B still transmits on 1002.
+- Pass: A stays silent, because B still transmits on 9002.
 - A runs `/vp_watch` to stop.
 
 ### 3. Listener cut mid-transmission
 - A runs `/vp_tx 20 5`. Switch to B, and talk.
-- Once B shows `VOICE ARRIVING`, B runs `/vp_unlisten 1001`.
+- Once B shows `VOICE ARRIVING`, B runs `/vp_unlisten 9001`.
 - Pass: B changes to silent while A is still transmitting.
 
 ### 4. Per-talker audio
-- B runs `/vp_listen 1001 1`.
-- B runs `/vp_fx full`, and A transmits. Repeat with `worn`, `bad`, `mute` and `near`.
-- Pass: `worn` is harsher than `full`, and `bad` is harsher than `worn`. `mute` is silent. `near` has no radio effect.
+- B runs `/vp_listen 9001 1`.
+- B runs `/vp_fx full`, and A transmits. Repeat with `worn`, `bad` and `mute`.
+- Pass: `worn` is harsher than `full`, and `bad` is harsher than `worn`. `mute` is silent.
+- B runs `/vp_spot c`, then `/vp_fx near`. A transmits.
+- Pass: B hears A's normal voice with no radio effect. `near` is normal proximity voice, so it is silent at 150 metres.
+- B runs `/vp_spot b`.
 - B runs `/vp_fx full`, then `/vp_fx mute 9999`. A transmits.
 - Pass: B still hears A, because the mute applies only to id 9999.
-- B runs `/vp_join 1001`, and A transmits. Then B runs `/vp_join 1002` and `/vp_listen 1001 1`, and A transmits.
+- B runs `/vp_join 9001`, and A transmits. Then B runs `/vp_join 9002` and `/vp_listen 9001 1`, and A transmits.
 - Pass: A is quieter as a listen-only channel than as the primary channel.
 - B runs `/vp_fx off`.
 
 ### 5. Keyless listener
 - Confirm that B is not spectating and is not on a scripted camera.
-- B runs `/vp_unlisten 1001`, `/vp_listen 1001 0` and `/vp_watch <A id>`.
+- B runs `/vp_unlisten 9001`, `/vp_listen 9001 0` and `/vp_watch <A id>`.
 - A transmits.
 - Pass: B hears nothing, and the watch stays on silent.
 - Pass: B's console shows "ENC traffic started" and "stopped", with no talker id.
-- Control: B runs `/vp_listen 1001 1`, and A transmits.
+- Control: B runs `/vp_listen 9001 1`, and A transmits.
 - Pass: B shows `VOICE ARRIVING`. This proves the watch works.
 
 ### 6. Phone call during radio use
-- B stays on `/vp_listen 1001 1`. A and B both run `/vp_call 5`.
+- B stays on `/vp_listen 9001 1`. A and B both run `/vp_call 5`.
 - A runs `/vp_tx 20 5`. Switch to B, and talk.
 - While A is transmitting, B runs `/vp_call 0`.
 - Pass: B keeps hearing A on the radio until "Radio key up".
@@ -123,7 +126,7 @@ First, A runs `/vp_spot a`, and B runs `/vp_spot b`. The spots are 150 metres ap
 - A presses and releases Left Alt once to clear the radio key.
 - B runs `/vp_watch <A id>`. A runs `/vp_tx 10 5`.
 - Pass: B stays silent, because the restart removed its listener.
-- B runs `/vp_listen 1001 1`, then closes its client. A runs `/vp_tx 5 0`.
+- B runs `/vp_listen 9001 1`, then closes its client. A runs `/vp_tx 5 0`.
 - Pass: the server console shows no error.
 
 ## When done

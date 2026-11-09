@@ -99,13 +99,15 @@ RegisterCommand('vp_tx', function(_, args)
 	end)
 end, false)
 
--- Two fixed spots 150 metres apart, beyond every proximity range.
+-- Spots a and b are 150 metres apart, beyond every proximity range.
+-- Spot c is 3 metres from a, for testing normal proximity voice.
 local spots = {
 	a = { -1336.0, -3044.0, 20.0 },
 	b = { -1186.0, -3044.0, 20.0 },
+	c = { -1333.0, -3044.0, 20.0 },
 }
 
--- /vp_spot <a|b|off>
+-- /vp_spot <a|b|c|off>
 RegisterCommand('vp_spot', function(_, args)
 	local ped = PlayerPedId()
 	if args[1] == 'off' then
@@ -113,7 +115,7 @@ RegisterCommand('vp_spot', function(_, args)
 		return say('Released from the test spot.')
 	end
 	local spot = spots[args[1]]
-	if not spot then return say('Use a, b or off.') end
+	if not spot then return say('Use a, b, c or off.') end
 	SetEntityCoordsNoOffset(ped, spot[1], spot[2], spot[3], false, false, false)
 	FreezeEntityPosition(ped, true)
 	say(('Moved to test spot %s and frozen in place.'):format(args[1]))

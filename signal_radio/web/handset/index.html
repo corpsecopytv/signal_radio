@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Radio handset</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="strip" class="strip" data-mode="idle" hidden>
+		<span id="stripChannel" class="strip-channel"></span>
+		<span id="stripStatus" class="strip-status"></span>
+	</div>
+
+	<section id="handset" class="handset" aria-label="Radio handset" hidden>
+		<div class="crown">
+			<button id="power" class="knob knob-power" type="button" title="Turn the radio on or off">
+				<span class="knob-cap" aria-hidden="true"></span>
+				<span class="knob-label">Power</span>
+			</button>
+			<button id="channelKnob" class="knob" type="button" title="Next channel. Scroll to step through channels.">
+				<span class="knob-cap" aria-hidden="true"></span>
+				<span class="knob-label">Channel</span>
+			</button>
+			<button id="panic" class="emergency" type="button" title="Hold to send an emergency alert">
+				<span class="emergency-label">Hold for<br>emergency</span>
+			</button>
+		</div>
+
+		<div class="chassis">
+			<button id="ptt" class="ptt" type="button"><span>Hold to talk</span></button>
+
+			<div class="face">
+				<div id="grip" class="grille" title="Drag to move the radio">
+					<span id="led" class="led" data-led="off" aria-hidden="true"></span>
+				</div>
+
+				<div id="lcd" class="lcd" data-mode="off" role="status" aria-live="polite">
+					<div id="viewMain" class="view">
+						<div class="lcd-top">
+							<span id="zone" class="lcd-zone"></span>
+							<span id="scanFlag" class="lcd-flag" hidden>Scan</span>
+							<span class="bars" aria-label="Signal strength"><i></i><i></i><i></i><i></i></span>
+						</div>
+						<div id="channel" class="lcd-channel"></div>
+						<div id="status" class="lcd-status"></div>
+					</div>
+					<div id="viewList" class="view" hidden>
+						<div id="listTitle" class="lcd-zone"></div>
+						<div id="list" class="lcd-list"></div>
+					</div>
+					<div id="message" class="lcd-message" hidden></div>
+					<div class="lcd-softkeys" aria-hidden="true">
+						<span id="softLabel1"></span><span id="softLabel2"></span><span id="softLabel3"></span>
+					</div>
+				</div>
+
+				<div class="softkeys">
+					<button id="soft1" class="key" type="button"></button>
+					<button id="soft2" class="key" type="button"></button>
+					<button id="soft3" class="key" type="button"></button>
+				</div>
+
+				<div class="rockers">
+					<div class="rocker" role="group" aria-label="Channel">
+						<button id="channelPrev" type="button" aria-label="Previous channel">&#8249;</button>
+						<span>Channel</span>
+						<button id="channelNext" type="button" aria-label="Next channel">&#8250;</button>
+					</div>
+					<div class="rocker" role="group" aria-label="Volume">
+						<button id="volumeDown" type="button" aria-label="Lower volume">&minus;</button>
+						<span>Volume</span>
+						<button id="volumeUp" type="button" aria-label="Raise volume">+</button>
+					</div>
+				</div>
+
+				<button id="close" class="putaway" type="button">Put radio away</button>
+			</div>
+		</div>
+	</section>
+
+	<script src="skin.js"></script>
+	<script src="app.js"></script>
+</body>
+</html>

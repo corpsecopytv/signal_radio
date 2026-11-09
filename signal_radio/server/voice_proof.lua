@@ -61,5 +61,17 @@ end)
 register('vp_state', function(src, args)
 	local channel = channelArg(src, args)
 	if not channel then return end
-	reply(src, ('Channel %d members: %s'):format(channel, json.encode(pma:getPlayersInRadioChannel(channel))))
+	local ids, talkingById = {}, {}
+	for id, talking in pairs(pma:getPlayersInRadioChannel(channel)) do
+		ids[#ids + 1] = id
+		talkingById[id] = talking
+	end
+	table.sort(ids)
+
+	local members = {}
+	for i = 1, #ids do
+		local id = ids[i]
+		members[i] = ('%d%s (%s)'):format(id, id == src and ' [you]' or '', talkingById[id] and 'talking' or 'idle')
+	end
+	reply(src, ('Channel %d members: %s'):format(channel, #members > 0 and table.concat(members, ', ') or 'none'))
 end)

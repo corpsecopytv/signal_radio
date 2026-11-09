@@ -2,7 +2,7 @@
 
 Radio system for the Apex Network FiveM server, built on pma-voice.
 
-The full design is in [docs/plan.md](docs/plan.md). The project is at build step 1, the voice proof.
+The full design is in [docs/plan.md](docs/plan.md). Step 1, the voice proof, is done. The core radio and handset are built and ready for in-game testing.
 
 ## Layout
 - `signal_radio/` is the FiveM resource.
@@ -10,3 +10,17 @@ The full design is in [docs/plan.md](docs/plan.md). The project is at build step
 - `docs/voice_proof.md` is the step 1 test script.
 
 pma-voice, Night Shifts MDT and `server.cfg` are never committed to this repo.
+
+## Dev server setup
+Night Shifts is not connected yet, so a dev profile stands in for a shift. Add this to the dev `server.cfg` only:
+
+```
+setr signal_radio_dev_profiles 1
+```
+
+| Command or key | What it does |
+| --- | --- |
+| `/radio_dev <qps, qas, qfd, rfsq, off> [senior]` | Sets your dev department. `off` gives you the civilian radio. `senior` adds the command channel. Needs the `radio.admin` ACE. |
+| F6 or `/radio` | Opens or puts away the handset. The key can be changed in FiveM settings. |
+| Left Alt | Talks on the radio, as set by pma-voice. |
+| `/callsign <name>` | Sets your callsign. |

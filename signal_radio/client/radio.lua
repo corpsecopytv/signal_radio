@@ -1,0 +1,139 @@
+local pma = exports['pma-voice']
+
+-- Shared with client/ptt.lua
+Radio = {
+	state = { available = false },
+	busy = {},
+	priorityUntil = 0,
+	pressingUiPtt = false,
+}
+
+local handsetOpen = false
+
+function SendToHandset(messageType, payload)
+	payload = payload or {}
+	payload.type = messageType
+	SendNUIMessage(payload)
+end
+
+local function setHandsetOpen(open)
+	handsetOpen = open
+	SetNuiFocus(open, open)
+	SendToHandset('open', { open = open })
+	if not open and Radio.pressingUiPtt then
+		Radio.pressingUiPtt = false
+		ExecuteCommand('-radiotalk')
+	end
+end
+
+RegisterCommand('radio', function()
+	setHandsetOpen(not handsetOpen)
+end, false)
+RegisterKeyMapping('radio', 'Open radio handset', 'keyboard', 'F6')
+
+RegisterNetEvent('signal_radio:state', function(state)
+	if state.talkgroup ~= Radio.state.talkgroup or not state.power then
+		Radio.busy = {}
+	end
+	Radio.state = state
+	SendToHandset('state', { state = state, self = GetPlayerServerId(PlayerId()) })
+end)
+
+RegisterNetEvent('signal_radio:members', function(talkgroup, members)
+	SendToHandset('members', { talkgroup = talkgroup, members = members })
+end)
+
+RegisterNetEvent('signal_radio:talk', function(talkgroup, talker, callsign, talking)
+	if talkgroup == Radio.state.talkgroup and talker ~= GetPlayerServerId(PlayerId()) then
+		Radio.busy[talker] = talking or nil
+	end
+	SendToHandset('talk', { talkgroup = talkgroup, talker = talker, callsign = callsign, talking = talking })
+end)
+
+RegisterNetEvent('signal_radio:panic', function(talkgroup, label, callsign, sender)
+	if sender == GetPlayerServerId(PlayerId()) then
+		Radio.priorityUntil = GetGameTimer() + Config.PanicPriorityMs
+	end
+	SendToHandset('panic', { talkgroup = talkgroup, label = label, callsign = callsign })
+end)
+
+RegisterNetEvent('pma-voice:radioListenerActivity', function(_, active)
+	SendToHandset('encrypted', { active = active })
+end)
+
+RegisterNetEvent('signal_radio:panicRefused', function()
+	SendToHandset('panicRefused')
+end)
+
+local actions = {
+	ready = function()
+		local position = GetResourceKvpString('handsetPosition')
+		SendToHandset('prefs', { position = position and json.decode(position) or nil, volume = pma:getRadioVolume() })
+		TriggerServerEvent('signal_radio:hello')
+	end,
+	close = function()
+		setHandsetOpen(false)
+	end,
+	power = function(data)
+		TriggerServerEvent('signal_radio:setPower', data.on == true)
+	end,
+	selectTalkgroup = function(data)
+		TriggerServerEvent('signal_radio:selectTalkgroup', data.talkgroup)
+	end,
+	tune = function(data)
+		TriggerServerEvent('signal_radio:tune', tonumber(data.frequency))
+	end,
+	useFrequencyMode = function()
+		TriggerServerEvent('signal_radio:useFrequencyMode')
+	end,
+	setScanTalkgroup = function(data)
+		TriggerServerEvent('signal_radio:setScanTalkgroup', data.talkgroup, data.enabled == true)
+	end,
+	scan = function(data)
+		TriggerServerEvent('signal_radio:setScan', data.enabled == true)
+	end,
+	panic = function()
+		TriggerServerEvent('signal_radio:panic')
+	end,
+	ptt = function(data)
+		if data.down == true and not Radio.pressingUiPtt then
+			Radio.pressingUiPtt = true
+			ExecuteCommand('+radiotalk')
+		elseif data.down ~= true and Radio.pressingUiPtt then
+			Radio.pressingUiPtt = false
+			ExecuteCommand('-radiotalk')
+		end
+	end,
+	volume = function(data)
+		local volume = tonumber(data.value)
+		if not volume then return end
+		volume = math.max(0, math.min(100, math.floor(volume)))
+		pma:setRadioVolume(volume)
+		SetResourceKvpInt('radioVolume', volume)
+		SendToHandset('prefs', { volume = volume })
+	end,
+	savePosition = function(data)
+		if type(data.x) == 'number' and type(data.y) == 'number' then
+			SetResourceKvp('handsetPosition', json.encode({ x = data.x, y = data.y }))
+		end
+	end,
+}
+
+RegisterNUICallback('action', function(data, cb)
+	local action = actions[data.action]
+	if action then action(data) end
+	cb('ok')
+end)
+
+CreateThread(function()
+	local savedVolume = GetResourceKvpInt('radioVolume')
+	if savedVolume > 0 then
+		pma:setRadioVolume(savedVolume)
+	end
+end)
+
+AddEventHandler('onResourceStop', function(resource)
+	if resource == GetCurrentResourceName() then
+		SetNuiFocus(false, false)
+	end
+end)
