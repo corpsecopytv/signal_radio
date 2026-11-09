@@ -1,0 +1,21 @@
+# Server secrets and local config
+server.cfg
+*.cfg.local
+.env
+.env.*
+*.key
+*.pem
+tokens.*
+
+# Third-party resources are never committed
+pma-voice/
+night_shifts/
+nights_*/
+
+# Tooling
+node_modules/
+*.log
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
