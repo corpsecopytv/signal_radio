@@ -370,7 +370,7 @@ function render() {
 		$('channel').textContent = state.tuning ? tuned : (current ? current.label : '');
 		$('status').textContent = statusLine(index);
 	}
-	$('scanFlag').hidden = !(on && state.scanning);
+	$('scanFlag').hidden = !(on && state.scanning && !state.tuning);
 	if (app.open && !listing) fitChannelLabel();
 
 	const message = $('message');

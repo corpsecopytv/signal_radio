@@ -9,7 +9,7 @@ The server framework is not confirmed. The radio does not depend on a framework.
 
 First release: handheld radio, talkgroups and zones, permissions, civilian radios, encrypted talkgroups, panic, scan, towers that players can jam, signal-quality audio, and an in-game dispatch console.
 
-Working resource name: `signal_radio`. The handsets use product photos of the Motorola APX 2000, Motorola APX 8000XE and Baofeng UV-5R with clickable zones, chosen for this private server. The tones are our own. Replace the photos before any sale or public release.
+Working resource name: `signal_radio`. The handsets use product photos of the Motorola APX 2000, Motorola APX 8000XE and Baofeng UV-5R with clickable zones, chosen for this private server. The handset generates its own tones. Replace the photos before any sale or public release.
 
 ## What pma-voice gives us (checked against its source)
 - One radio channel per player. The source has a TODO for multi-channel.
@@ -17,7 +17,7 @@ Working resource name: `signal_radio`. The handsets use product photos of the Mo
 - Client event `pma-voice:radioActive`. Net event `pma-voice:setTalkingOnRadio` carries talk state.
 - `registerCustomSubmix` adds audio effects, but `toggleVoice` applies one shared `radio` submix to all talkers.
 - Membership is only checked on join, not on transmit.
-- `toggleVoice` skips radio volume and effect for talkers within 4 units. Keep this: you hear them in person.
+- `toggleVoice` has a 4-unit check, but version 7.0.1 never fills the table it reads. The radio effect plays at any distance.
 
 ## Night Shifts MDT integration
 - Night Shifts gives server and client exports for shift data (start, end, status), departments, ranks, postal lookup, call forwarding (`ForwardCallToMDT`) and shift checks per department. Other export names and parameters: `TODO: confirm in Night Shifts docs`.
@@ -28,32 +28,34 @@ Working resource name: `signal_radio`. The handsets use product photos of the Mo
 - Risk: a Night Shifts update can overwrite the hook. Keep the hook in `patches/night_shifts_hook.md` beside the pma-voice patch, with the steps to reapply it.
 
 ## Architecture
-The server is the authority. A registry maps each talkgroup to a pma-voice integer channel (range starting at 1001, to avoid clashing with other scripts). The client and UI only request changes.
+The server is the authority. A registry maps each talkgroup to a pma-voice integer channel (range starting at 1001, to avoid clashing with other scripts). A tuned frequency uses its value in kHz as the channel, for example 476425. The client and UI only request changes.
 
 ```
 resources/[voice]/pma-voice            patched from patches/signal_radio.patch in the repo
 resources/[radio]/signal_radio/
   fxmanifest.lua
-  config/    talkgroups.lua, codeplugs.lua, towers.lua, tones.lua
-  server/    bridge, registry, permissions, transmit, scan, towers, emergency, dispatch, staff, gps (optional)
-  client/    radio, ptt, signal, audio (submixes), towers, emergency
-  web/       handset/, dispatch/, shared/, sounds/   (plain JS, no build step)
+  config/    talkgroups.lua, codeplugs.lua
+  server/    bridge, registry, permissions, radio, transmit, voice_proof
+  client/    radio, ptt, audio, voice_proof
+  web/       handset/ with skins/   (plain JS, no build step)
 ```
 
-No database. Config lives in Lua files, tower jam timers and callsigns in server KVP, and player preferences in client KVP.
+Later steps add `config/towers.lua`, server and client tower files, `web/dispatch/`, staff tools and optional GPS. `voice_proof` holds dev-only test commands. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
+
+No database. Config lives in Lua files. Callsigns, scan choices and tower jam timers live in server KVP. Handset position and volume live in client KVP.
 
 ### Permissions
-- The codeplug comes from the Night Shifts department and rank, through `server/bridge.lua`.
-- A codeplug defines zones, transmit and scan talkgroups, encryption keys, panic behaviour and optional GPS visibility.
+- The codeplug comes from the Night Shifts department and rank, through `server/bridge.lua`. Until Night Shifts is connected, `/radio_dev` sets a dev profile on the dev server, and every other player gets a civilian radio.
+- A codeplug defines the skin, zones and starting scan list. Later steps add panic behaviour and optional GPS visibility.
 - ACE is used only for `radio.admin`, `radio.priority` and `radio.dispatch`.
 - Callsign uses `/callsign` and is saved in server KVP.
 - Duty comes from the Night Shifts shift state. Ending a shift in the MDT removes the player from restricted talkgroups.
-- `canUseRadio(source)` in `server/bridge.lua` returns true only when the player has an active Night Shifts shift, or is using a civilian radio (see Civilian use). A player with no active shift gets the civilian radio.
+- `canUseRadio(source)` in `server/bridge.lua` returns true for every player. A player with no active shift gets the civilian radio (see Civilian use).
 - `canUseJammer(source)` in `server/bridge.lua` denies by default. It allows only players who hold a jammer item (TODO: name the inventory resource once the framework is confirmed).
 
 ### pma-voice patch (2 additions, kept minimal)
 1. **Listen-only channels.** New server exports `addRadioListener(source, channel, withAudio)` and `removeRadioListener(source, channel)`. When `withAudio` is true, the listener gets talk events and the talker adds the listener through `addVoiceTargets`. When `withAudio` is false, the listener gets talk events only, and the talker does not add the listener as a voice target. `signal_radio` sets `withAudio` to false for keyless listeners on encrypted talkgroups.
-2. **Per-talker resolver.** A client export registers a function that `toggleVoice` calls for radio audio. It returns `{ submix, volume }`, or nil to mute that talker.
+2. **Per-talker resolver.** A client export registers a function that `toggleVoice` calls for radio audio. It returns `{ submix, volume }`, `{ proximity = true }` for normal voice, or nil to mute that talker. The `refreshRadioAudio` export reapplies audio for every talker.
 
 Everything else uses public exports. Patches between talkgroups need no pma change, because members move to one shared channel.
 
@@ -71,22 +73,22 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 - **Panic:** The radio type decides whether a radio has a panic button. A radio type without an emergency button has no panic.
 - **Other limits:** Civilians have no dispatch access, because the console needs `radio.dispatch`.
 - **Handset:** Civilian radios use the Baofeng UV-5R skin. It has no emergency button, so civilian radios have no panic.
-- **UV-5R keys:** MENU opens the units on the current frequency. BAND opens a VHF or UHF choice, because civilians have no zones. EXIT returns to the channel screen. VFO/MR is not clickable. The square below VFO/MR lights only while transmitting.
-- **Before civilian radios go live:** Close the two encryption gaps in "Findings from build step 1". These are the spectator and scripted camera path, and patching an encrypted talkgroup with a clear one.
+- **UV-5R keys:** MENU opens the units on the current frequency, and selects the highlighted row in the band list. BAND opens a VHF or UHF choice, because civilians have no zones. EXIT returns to the channel screen. The `*` key deletes a digit. VFO/MR and A/B are not clickable. The square below VFO/MR lights only while transmitting.
+- **Before civilian radios go live:** Set `voice_disableAutomaticListenerOnCamera`, which closes the scripted camera path. Decide how to handle spectator mode, which can still hear encrypted voice. Step 6 must block patching an encrypted talkgroup with a clear one.
 
 ## Repository
-- The project lives in a private GitHub repo. TODO: confirm the repo name and owner (personal account or an Apex Network organisation).
-- The repo holds `signal_radio/`, `patches/signal_radio.patch`, `patches/night_shifts_hook.md` and this plan as `docs/plan.md`.
+- The project lives in the private GitHub repo `corpsecopytv/signal_radio`.
+- The repo holds `signal_radio/`, `patches/signal_radio.patch`, this plan as `docs/plan.md`, and the test scripts in `docs/`. Step 4 adds `patches/night_shifts_hook.md`.
 - pma-voice is not committed. The patch file records the pinned pma-voice version.
 - Night Shifts files are never committed, because the resource is paid and partly escrowed. `patches/night_shifts_hook.md` holds only our own hook lines and the steps to reapply them.
 - `server.cfg`, keys and tokens are never committed. A `.gitignore` covers them.
-- Work happens on branches and merges to `main`. Changes reach the dev server before the live server.
+- Work happens on branches and merges to `main`. Changes reach the dev server before the live server. TODO: create `main`. The repo currently has only `feat/voice-proof`.
 
 ## Feature design
 - **Talkgroups:** Per-department talkgroups for QPS, QAS, QFD and RFSQ. One interop talkgroup for all four departments. One command talkgroup for senior ranks per department. All are encrypted with one shared key, and every emergency radio can switch between the departments' talkgroups.
-- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. `addRadioDisableBit` blocks transmit when there is no signal, no radio or the channel is busy.
+- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. The handset's side button also transmits. `addRadioDisableBit` cuts a transmission when the channel is busy, as a short pulse. Step 7 adds the no-signal block.
 - **Half-duplex:** The server tracks each channel's active talker. Clients block locally and play a busy tone. If two key up together, the server keeps the first and the loser is cut off. `radio.priority` overrides the block.
-- **Scan:** Each player chooses what their radio scans, from any talkgroup their radio can use. The codeplug sets the starting list. The server validates each choice and saves it per player and department. Primary channel transmits. Scanned channels are heard through listeners at lower volume.
+- **Scan:** Each player chooses what their radio scans, from any talkgroup their radio can use. The codeplug sets the starting list. The server validates each choice and saves it per player and department. The Scan key opens a list with an on or off row, then every talkgroup with a tick. Primary channel transmits. Scanned channels are heard through listeners at 60% volume, all at once. Scan starts off after a reconnect.
 - **Signal:** Client computes the best tower every 1–2 seconds, using distance, jam state and a vehicle bonus. It publishes only tier changes (full, worn, bad, none) in a state bag.
 - **Signal audio:** Three custom submixes. The receiver uses the worse of talker and own tier. Tier none mutes receive and blocks transmit. Dispatch consoles ignore signal.
 - **Towers:** Replicated from the server. Admin commands place towers and show their radius. Place towers so coverage overlaps. One jammed tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
@@ -97,15 +99,15 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - Night Shifts panic fires the `signal_radio` hook event, so the radio plays the panic tone and gives the sender priority.
   - Man-down sends a call to the MDT through `ForwardCallToMDT`.
 - **GPS (optional):** Build this only if the Night Shifts map does not meet the need. Server-side OneSync positions, batched every 2 seconds, sent only to codeplugs with GPS visibility.
-- **Handset UI:** Zone and talkgroup selection, talker display, signal bars, member list, scan toggle, panic and draggable position. The radio's up and down keys move through any list that does not fit on the screen.
+- **Handset UI:** Zone and talkgroup selection, talker display, signal bars, member list, scan list, panic and draggable position. Each skin is a photo with a live screen and clickable zones over the real controls. Signal bars show full until step 7. The radio's up and down keys move a highlight through any list. Select or Enter chooses the highlighted row. A status strip stays on screen when the radio is put away.
+- **Skins:** QPS and QAS use the APX 2000. QFD and RFSQ use the APX 8000XE in hi-vis. Civilians use the UV-5R. Each codeplug sets its skin in `config/codeplugs.lua`.
 - **Dispatch console (`/dispatch`, `radio.dispatch`):** Transmit on a selected talkgroup and monitor others. Tone-outs, talkgroup patching, moving a unit, and a transmission log (who, where, when, with no audio recording).
 - **Emergency frequency mode:** Every emergency radio has every zone. The Zone list also has a Frequency option. In frequency mode, an emergency radio tunes by frequency like a civilian radio, and can talk to civilians on a clear frequency. Dialling an emergency frequency joins that talkgroup with clear audio. A command frequency stays encrypted for radios that are not senior. Scan pauses in frequency mode. Choosing a zone returns the radio to zone mode.
 - **Staff tools:** Admin commands force a player off a channel, clear a stuck talker and dump channel state to the console.
 - **Encrypted talkgroups:**
   - Purpose: Encryption keeps emergency services traffic private from civilian radios (see Civilian use).
-  - A talkgroup in `config/talkgroups.lua` can set `encrypted = true` and a `key` name.
-  - A codeplug lists the keys it holds. A player whose codeplug holds the key hears clear audio.
-  - A player who can join or scan the talkgroup but has no key hears no voice. The server does not add that player as a voice target. The player gets only the talk start and stop events.
+  - Every talkgroup in `config/talkgroups.lua` is encrypted. A radio that can use a talkgroup holds its key and hears clear audio.
+  - A radio that tunes to a talkgroup's frequency without access hears no voice. The server does not add that player as a voice target. The player gets only channel activity, with no talker identity.
   - A keyless player stays off the talkgroup's pma-voice channel, because pma-voice makes every channel member a voice target. `signal_radio` adds that player with `addRadioListener` and `withAudio` set to false.
   - When a talker on the talkgroup keys up, the keyless client plays a looping "encrypted" noise, generated in the handset. The loop stops when the talker stops.
   - The keyless handset shows "ENC" and does not show the talker's callsign or name.
@@ -113,7 +115,7 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - Signal tiers still apply. Tier none stops the noise loop too.
   - Do not use a distortion submix for this. A submix still sends the real voice to the client, and a modified client can remove the submix.
   - Use case: a civilian who tunes to an emergency frequency hears only noise.
-- **Tones:** Our own files for grant, busy, no-signal, panic, scan and alert. pma mic clicks set to 0 so sounds don't double up.
+- **Tones:** The handset generates its tones for grant, release, busy, power, receive and panic. Step 7 adds a no-signal tone. pma mic clicks set to 0 so sounds don't double up.
 
 ## Server config
 ```
@@ -124,7 +126,7 @@ setr voice_onClickVolume 0
 setr voice_offClickVolume 0
 setr voice_disableAutomaticListenerOnCamera 1
 ```
-OneSync must be on.
+OneSync must be on. The dev server also uses `setr signal_radio_dev_profiles 1` and `setr signal_radio_voice_proof 1`. Never set these on the live server.
 
 ## Build order
 1. **Voice proof:** Apply the pma-voice patch on a separate dev server. Prove listen-only audio and per-talker submixes with test commands.
@@ -135,6 +137,22 @@ OneSync must be on.
 6. **Dispatch console:** Monitoring, patching, tone-outs, unit moves, log.
 7. **Towers:** Signal tiers, submix tuning, jammer, saved timers, fireground simplex channel.
 8. **Hardening:** Rate limits, player-drop and resource-restart cleanup, staff tools, load test.
+
+## Build status
+Status at 2026-11-10.
+
+| Step | Status |
+| --- | --- |
+| 1. Voice proof | Done. All seven in-game tests passed. |
+| 2. Core radio | Built. Waiting on the in-game test. Dev profiles stand in for Night Shifts. |
+| 3. Handset UI | Built. Waiting on the in-game test. |
+| 4. Night Shifts integration and emergency | Radio-side panic is built. The rest needs the Night Shifts export names. |
+| 5. Scan, civilian radios and encryption | Built. Waiting on the in-game test. Spectator mode is still open. |
+| 6. Dispatch console | Not started. |
+| 7. Towers | Not started. |
+| 8. Hardening | Not started. |
+
+Emergency frequency mode, all-zone access and chosen scan lists are built as part of steps 2, 3 and 5. The in-game test for this build is `docs/test_core_radio.md`.
 
 ## Out of this release
 Battery, text messaging, voice bleed to bystanders, browser dispatch, other CAD or MDT systems, and talkaround when all towers are down. The RFSQ fireground channel is the one exception to the talkaround limit. Voice bleed is left out because Mumble audio plays from the talker's position, not from the receiving radio.
@@ -150,7 +168,7 @@ Battery, text messaging, voice bleed to bystanders, browser dispatch, other CAD 
 - **Jammer balance:** At about 20 players a night, a jam can stop all emergency comms in a zone. Tune the jam time and tower overlap in play tests.
 
 ## Verification
-Static checks can run during the build: Lua syntax, and NUI in a browser with mock data. Audio and networking need a real server with at least 3 connected clients (2 can do basic tests).
+Static checks can run during the build: Lua syntax, and NUI in a browser with mock data. Audio and networking need a real server. One person can run most tests with two clients on one PC, using the steps in `docs/test_core_radio.md`. Overlap and load tests need more real players.
 
 - Talker A on a channel is heard by B on the same channel, not by C elsewhere.
 - C scanning that channel hears A but cannot transmit on it.
@@ -192,6 +210,6 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 These come from the pma-voice 7.0.1 source. They correct or add to the sections above.
 
 - **4-unit rule:** `currentTargets` is never filled in 7.0.1, so the 4-unit check in `toggleVoice` never applies. The radio effect plays at any distance. The per-talker resolver can return `{ proximity = true }` to restore this rule.
-- **Disable bits:** pma-voice ignores radio talk events while a disable bit is set. A lost stop event leaves a talker stuck on radio audio. Step 2 pulses the bit for a busy channel, instead of holding it. Step 2 also calls the `refreshRadioAudio` export after removing any bit.
-- **Keyless listeners:** The talker never targets a keyless listener. pma-voice still listens to all in-scope players when a player spectates or uses a scripted camera. That path, or a modified client, can receive a talker's voice. Step 2 must decide how to close this path for keyless players.
+- **Disable bits:** pma-voice ignores radio talk events while a disable bit is set. A lost stop event leaves a talker stuck on radio audio. The radio pulses the bit for a busy channel, instead of holding it. It also calls the `refreshRadioAudio` export after removing the bit.
+- **Keyless listeners:** The talker never targets a keyless listener. pma-voice still listens to all in-scope players when a player spectates or uses a scripted camera. That path, or a modified client, can receive a talker's voice. `voice_disableAutomaticListenerOnCamera` closes the scripted camera path. Spectator mode and modified clients remain open.
 - **Patched talkgroups:** A patch moves members onto one shared channel. Patching an encrypted talkgroup with a clear one would expose its voice to the clear group. Step 6 must block that patch.

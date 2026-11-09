@@ -2,12 +2,13 @@
 
 Radio system for the Apex Network FiveM server, built on pma-voice.
 
-The full design is in [docs/plan.md](docs/plan.md). Step 1, the voice proof, is done. The core radio and handset are built and ready for in-game testing.
+The full design and build status are in [docs/plan.md](docs/plan.md). Step 1, the voice proof, is done. The core radio and handsets are built and ready for in-game testing with [docs/test_core_radio.md](docs/test_core_radio.md).
 
 ## Layout
 - `signal_radio/` is the FiveM resource.
 - `patches/signal_radio.patch` is the patch for pma-voice 7.0.1.
 - `docs/voice_proof.md` is the step 1 test script.
+- `docs/test_core_radio.md` is the test script for the core radio and handsets.
 
 pma-voice, Night Shifts MDT and `server.cfg` are never committed to this repo.
 
