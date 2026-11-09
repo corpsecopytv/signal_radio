@@ -7,7 +7,8 @@ It covers build `566fae8` on `feat/voice-proof`, plus any later commits on that 
 You need a headset with a microphone. Allow about 60 minutes.
 
 ## What this run does not cover
-- Night Shifts MDT, towers, signal quality, jammers and the dispatch console. These are not built yet.
+- Night Shifts MDT and the dispatch console. These are not built yet.
+- Towers, signal quality and jammers. `docs/test_towers.md` covers these.
 - Overlapping talkers from three or more players, and the load test. These need real players.
 - The `radio.priority` ACE. Test 5 proves priority through panic instead.
 - Spectator mode hearing encrypted voice. This is a known open gap.
@@ -40,7 +41,7 @@ Pass: the server console shows no `signal_radio` or `pma-voice` errors.
 ## How to run these tests
 - **Keyboard focus:** While the radio is open, it takes your keyboard. Press Esc or use "Put radio away" before typing a chat command.
 - **Open the radio:** Press F6.
-- **Talk on the radio:** With the radio put away, hold Left Alt. With it open, hold the side bar on the left.
+- **Talk on the radio:** Hold your radio key, Left Alt by default, with the radio open or put away. With it open, you can also hold the side bar on the left.
 - **Timed transmit:** Put the radio away and run `/vp_tx 10 5`. Switch to the other client within 5 seconds, then talk until "Radio key up" appears.
 - **Find a server id:** Run `/vp_state <channel>`. It marks your own id. A talkgroup's channel is its number in `config/talkgroups.lua`. A frequency's channel is its value in kHz, so 462.125 is 462125.
 - **Check that voice arrives:** Run `/vp_watch <talker id>`, and read the result in chat or the F8 console.
@@ -73,7 +74,11 @@ A runs `/radio_dev qps senior`, and opens the radio.
 - [ ] Number keys 1 to 3 jump to that channel in the zone.
 - [ ] Dragging the Motorola badge moves the radio.
 - [ ] Reconnecting A puts the radio back in the dragged position.
-- [ ] Esc puts the radio away, and the game gets the mouse back.
+- [ ] With the radio open, holding your radio key transmits.
+- [ ] With the radio open, the movement keys and mouse do not move your character or camera, and clicks do not fire a weapon.
+- [ ] Esc puts the radio away, the game gets the mouse back, and the pause menu does not open.
+- [ ] F6 also puts the radio away.
+- [ ] After the radio is put away, walking and aiming work normally.
 - [ ] The status strip shows the zone and channel while the radio is away.
 
 ## 2. Talking on a talkgroup

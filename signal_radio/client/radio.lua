@@ -4,6 +4,10 @@ local pma = exports['pma-voice']
 Radio = {
 	state = { available = false },
 	busy = {},
+	towers = {},
+	signal = 'full',
+	talkerSignal = {},
+	transmitting = false,
 	priorityUntil = 0,
 	pressingUiPtt = false,
 }
@@ -16,9 +20,41 @@ function SendToHandset(messageType, payload)
 	SendNUIMessage(payload)
 end
 
+-- The radio keeps game input on, so key bindings such as push-to-talk still work while it is open.
+-- This loop stops those keys from also moving, aiming or shooting.
+local PUSH_TO_TALK_CONTROL = 249
+local PAUSE_CONTROLS = { 199, 200 }
+local PAUSE_GUARD_MS = 300
+local controlLockId = 0
+
+local function lockGameControlsWhileOpen()
+	controlLockId = controlLockId + 1
+	local lockId = controlLockId
+	CreateThread(function()
+		while handsetOpen and lockId == controlLockId do
+			for group = 0, 2 do
+				DisableAllControlActions(group)
+				EnableControlAction(group, PUSH_TO_TALK_CONTROL, true)
+			end
+			Wait(0)
+		end
+
+		-- Esc closes the radio. Keep blocking it briefly so it does not also open the pause menu.
+		local guardEnds = GetGameTimer() + PAUSE_GUARD_MS
+		while GetGameTimer() < guardEnds and lockId == controlLockId do
+			for _, control in ipairs(PAUSE_CONTROLS) do
+				DisableControlAction(0, control, true)
+			end
+			Wait(0)
+		end
+	end)
+end
+
 local function setHandsetOpen(open)
 	handsetOpen = open
 	SetNuiFocus(open, open)
+	SetNuiFocusKeepInput(open)
+	lockGameControlsWhileOpen()
 	SendToHandset('open', { open = open })
 	if not open and Radio.pressingUiPtt then
 		Radio.pressingUiPtt = false
@@ -43,10 +79,12 @@ RegisterNetEvent('signal_radio:members', function(talkgroup, members)
 	SendToHandset('members', { talkgroup = talkgroup, members = members })
 end)
 
-RegisterNetEvent('signal_radio:talk', function(talkgroup, talker, callsign, talking)
+RegisterNetEvent('signal_radio:talk', function(talkgroup, talker, callsign, talking, signal)
 	if talkgroup == Radio.state.talkgroup and talker ~= GetPlayerServerId(PlayerId()) then
 		Radio.busy[talker] = talking or nil
 	end
+	Radio.talkerSignal[talker] = talking and signal or nil
+	if talking then pma:refreshRadioAudio() end
 	SendToHandset('talk', { talkgroup = talkgroup, talker = talker, callsign = callsign, talking = talking })
 end)
 
@@ -135,5 +173,6 @@ end)
 AddEventHandler('onResourceStop', function(resource)
 	if resource == GetCurrentResourceName() then
 		SetNuiFocus(false, false)
+		SetNuiFocusKeepInput(false)
 	end
 end)

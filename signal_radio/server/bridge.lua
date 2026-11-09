@@ -19,6 +19,11 @@ function canUseRadio(_)
 	return true
 end
 
+--- The jammer needs no item. Any player can walk up to a tower and start the install.
+function canUseJammer(_)
+	return true
+end
+
 if devProfilesEnabled then
 	-- /radio_dev <qps|qas|qfd|rfsq|off> [senior]
 	RegisterCommand('radio_dev', function(src, args)

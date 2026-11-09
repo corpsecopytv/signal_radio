@@ -257,6 +257,9 @@ button:focus-visible {
 .bars i:nth-child(2) { height: 50%; }
 .bars i:nth-child(3) { height: 75%; }
 .bars i:nth-child(4) { height: 100%; }
+.bars[data-level="2"] i:nth-child(n+3),
+.bars[data-level="1"] i:nth-child(n+2),
+.bars[data-level="0"] i { opacity: 0.2; }
 
 .lcd-channel {
 	margin-top: 4px;

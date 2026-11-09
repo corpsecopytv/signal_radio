@@ -4,13 +4,14 @@ lua54 'yes'
 
 name 'signal_radio'
 description 'Radio system for the Apex Network FiveM server'
-version '0.2.0'
+version '0.3.0'
 
 dependency 'pma-voice'
 
 shared_scripts {
 	'config/talkgroups.lua',
 	'config/codeplugs.lua',
+	'config/towers.lua',
 }
 
 server_scripts {
@@ -19,6 +20,7 @@ server_scripts {
 	'server/permissions.lua',
 	'server/radio.lua',
 	'server/transmit.lua',
+	'server/towers.lua',
 	'server/voice_proof.lua',
 }
 
@@ -26,6 +28,8 @@ client_scripts {
 	'client/radio.lua',
 	'client/ptt.lua',
 	'client/audio.lua',
+	'client/signal.lua',
+	'client/towers.lua',
 	'client/voice_proof.lua',
 }
 

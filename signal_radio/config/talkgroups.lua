@@ -15,6 +15,8 @@ Config.Talkgroups = {
 
 	{ id = 'rfsq_ops', label = 'OPS', channel = 1031, frequency = 450325 },
 	{ id = 'rfsq_cmd', label = 'Command', channel = 1032, frequency = 450350, seniorOnly = true },
+	-- Simplex works with no tower. Only players within range (metres) hear each other.
+	{ id = 'rfsq_fire', label = 'Fireground', channel = 1033, frequency = 450375, simplex = true, range = 500.0 },
 
 	{ id = 'interop', label = 'Interop', channel = 1091, frequency = 450500 },
 }
@@ -23,7 +25,7 @@ Config.Zones = {
 	{ id = 'qps', label = 'QPS', talkgroups = { 'qps_ops1', 'qps_ops2', 'qps_cmd' } },
 	{ id = 'qas', label = 'QAS', talkgroups = { 'qas_ops', 'qas_cmd' } },
 	{ id = 'qfd', label = 'QFD', talkgroups = { 'qfd_ops', 'qfd_cmd' } },
-	{ id = 'rfsq', label = 'RFSQ', talkgroups = { 'rfsq_ops', 'rfsq_cmd' } },
+	{ id = 'rfsq', label = 'RFSQ', talkgroups = { 'rfsq_ops', 'rfsq_fire', 'rfsq_cmd' } },
 	{ id = 'interop', label = 'Interop', talkgroups = { 'interop' } },
 }
 

@@ -15,6 +15,8 @@ const app = {
 	volume: 30,
 	entry: '',
 	encrypted: false,
+	encryptedTraffic: false,
+	bars: 4,
 	message: null,
 	messageTimer: null,
 	alert: null,
@@ -494,7 +496,10 @@ const handlers = {
 		}
 		if (before.talkgroup !== app.state.talkgroup) app.talkers.clear();
 		if (!app.state.power) { app.view = 'main'; app.entry = ''; }
-		if (!app.state.power || before.frequency !== app.state.frequency || before.tuning !== app.state.tuning) setEncrypted(false);
+		if (!app.state.power || before.frequency !== app.state.frequency || before.tuning !== app.state.tuning) {
+			app.encryptedTraffic = false;
+			setEncrypted(false);
+		}
 		if (!app.state.tuning) app.entry = '';
 		render();
 	},
@@ -520,12 +525,22 @@ const handlers = {
 		render();
 	},
 	encrypted(data) {
-		setEncrypted(data.active === true);
+		app.encryptedTraffic = data.active === true;
+		setEncrypted(app.encryptedTraffic && app.bars > 0);
 		render();
 	},
-	denied() {
+	signal(data) {
+		app.bars = data.bars;
+		document.querySelector('.bars').dataset.level = String(data.bars);
+		setEncrypted(app.encryptedTraffic && app.bars > 0);
+		render();
+	},
+	towerStatus(data) {
+		showMessage(`${data.label} tower ${data.online ? 'back online' : 'offline'}`, 3500);
+	},
+	denied(data) {
 		tones.busy();
-		showMessage('Channel busy');
+		showMessage(data.reason === 'no_signal' ? 'No signal' : 'Channel busy');
 	},
 	panic(data) {
 		tones.panic();

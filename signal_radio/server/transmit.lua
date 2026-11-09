@@ -1,6 +1,8 @@
 -- Talkers[talkgroupId][source] = true for everyone granted the air.
 Talkers = {}
 
+local VALID_SIGNAL = { full = true, worn = true, bad = true, none = true }
+
 function ForEachTalkgroupTarget(talkgroupId, callback)
 	for source in pairs(TalkgroupMembers[talkgroupId] or {}) do
 		callback(source)
@@ -10,9 +12,9 @@ function ForEachTalkgroupTarget(talkgroupId, callback)
 	end
 end
 
-local function broadcastTalk(talkgroupId, talker, callsign, talking)
+local function broadcastTalk(talkgroupId, session, talking)
 	ForEachTalkgroupTarget(talkgroupId, function(target)
-		TriggerClientEvent('signal_radio:talk', target, talkgroupId, talker, callsign, talking)
+		TriggerClientEvent('signal_radio:talk', target, talkgroupId, session.source, session.callsign, talking, session.signal)
 	end)
 end
 
@@ -27,15 +29,21 @@ function ClearTalker(session)
 	local talkgroupId = session.talkgroup
 	if talkgroupId and Talkers[talkgroupId] and Talkers[talkgroupId][session.source] then
 		removeTalker(talkgroupId, session.source)
-		broadcastTalk(talkgroupId, session.source, session.callsign, false)
+		broadcastTalk(talkgroupId, session, false)
 	end
 end
 
 --- Tells a player who joined late about transmissions already in progress.
 function SendActiveTalkers(target, talkgroupId)
 	for source in pairs(Talkers[talkgroupId] or {}) do
-		TriggerClientEvent('signal_radio:talk', target, talkgroupId, source, Sessions[source].callsign, true)
+		local session = Sessions[source]
+		TriggerClientEvent('signal_radio:talk', target, talkgroupId, source, session.callsign, true, session.signal)
 	end
+end
+
+local function isSimplex(talkgroupId)
+	local talkgroup = TalkgroupsById[talkgroupId]
+	return talkgroup ~= nil and talkgroup.simplex == true
 end
 
 RegisterNetEvent('pma-voice:setTalkingOnRadio')
@@ -48,14 +56,29 @@ AddEventHandler('pma-voice:setTalkingOnRadio', function(talking)
 
 	if talking == true then
 		if talkers and talkers[source] then return end
+		if session.signal == 'none' and not isSimplex(talkgroupId) then
+			return TriggerClientEvent('signal_radio:txDenied', source, 'no_signal')
+		end
 		if talkers and not HasPriority(session) then
-			return TriggerClientEvent('signal_radio:txDenied', source)
+			return TriggerClientEvent('signal_radio:txDenied', source, 'busy')
 		end
 		Talkers[talkgroupId] = talkers or {}
 		Talkers[talkgroupId][source] = true
-		broadcastTalk(talkgroupId, source, session.callsign, true)
+		broadcastTalk(talkgroupId, session, true)
 	elseif talkers and talkers[source] then
 		removeTalker(talkgroupId, source)
-		broadcastTalk(talkgroupId, source, session.callsign, false)
+		broadcastTalk(talkgroupId, session, false)
+	end
+end)
+
+-- Clients report their signal tier when it changes, so receivers can match the audio.
+RegisterNetEvent('signal_radio:signal', function(tier)
+	local source = source
+	local session = Sessions[source]
+	if not session or not VALID_SIGNAL[tier] then return end
+	session.signal = tier
+	local talkgroupId = session.talkgroup
+	if talkgroupId and Talkers[talkgroupId] and Talkers[talkgroupId][source] then
+		broadcastTalk(talkgroupId, session, true)
 	end
 end)

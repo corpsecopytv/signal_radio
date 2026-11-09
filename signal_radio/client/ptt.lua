@@ -7,11 +7,12 @@ local DENY_PULSE_MS = 150
 local denying = false
 local denied = false
 
-local function denyTransmit()
+--- @param reason string busy or no_signal
+function DenyTransmit(reason)
 	if denying then return end
 	denying, denied = true, true
 	pma:addRadioDisableBit(DENY_BIT)
-	SendToHandset('denied')
+	SendToHandset('denied', { reason = reason })
 	SetTimeout(DENY_PULSE_MS, function()
 		pma:removeRadioDisableBit(DENY_BIT)
 		pma:refreshRadioAudio()
@@ -24,9 +25,13 @@ local function hasPriority()
 end
 
 AddEventHandler('pma-voice:radioActive', function(active)
+	Radio.transmitting = active
 	if active then
+		if HasNoSignal() then
+			return DenyTransmit('no_signal')
+		end
 		if next(Radio.busy) and not hasPriority() then
-			return denyTransmit()
+			return DenyTransmit('busy')
 		end
 		SendToHandset('tx', { active = true })
 	else
@@ -37,9 +42,9 @@ AddEventHandler('pma-voice:radioActive', function(active)
 	end
 end)
 
-RegisterNetEvent('signal_radio:txDenied', function()
+RegisterNetEvent('signal_radio:txDenied', function(reason)
 	SendToHandset('tx', { active = false })
-	denyTransmit()
+	DenyTransmit(reason or 'busy')
 end)
 
 AddEventHandler('onResourceStop', function(resource)

@@ -34,15 +34,15 @@ The server is the authority. A registry maps each talkgroup to a pma-voice integ
 resources/[voice]/pma-voice            patched from patches/signal_radio.patch in the repo
 resources/[radio]/signal_radio/
   fxmanifest.lua
-  config/    talkgroups.lua, codeplugs.lua
-  server/    bridge, registry, permissions, radio, transmit, voice_proof
-  client/    radio, ptt, audio, voice_proof
+  config/    talkgroups.lua, codeplugs.lua, towers.lua
+  server/    bridge, registry, permissions, radio, transmit, towers, voice_proof
+  client/    radio, ptt, audio, signal, towers, voice_proof
   web/       handset/ with skins/   (plain JS, no build step)
 ```
 
-Later steps add `config/towers.lua`, server and client tower files, `web/dispatch/`, staff tools and optional GPS. `voice_proof` holds dev-only test commands. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
+Later steps add `web/dispatch/`, staff tools and optional GPS. `voice_proof` holds dev-only test commands. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
 
-No database. Config lives in Lua files. Callsigns, scan choices and tower jam timers live in server KVP. Handset position and volume live in client KVP.
+No database. Config lives in Lua files. Callsigns, scan choices, the tower list and tower jam timers live in server KVP. Handset position and volume live in client KVP.
 
 ### Permissions
 - The codeplug comes from the Night Shifts department and rank, through `server/bridge.lua`. Until Night Shifts is connected, `/radio_dev` sets a dev profile on the dev server, and every other player gets a civilian radio.
@@ -51,7 +51,7 @@ No database. Config lives in Lua files. Callsigns, scan choices and tower jam ti
 - Callsign uses `/callsign` and is saved in server KVP.
 - Duty comes from the Night Shifts shift state. Ending a shift in the MDT removes the player from restricted talkgroups.
 - `canUseRadio(source)` in `server/bridge.lua` returns true for every player. A player with no active shift gets the civilian radio (see Civilian use).
-- `canUseJammer(source)` in `server/bridge.lua` denies by default. It allows only players who hold a jammer item (TODO: name the inventory resource once the framework is confirmed).
+- `canUseJammer(source)` in `server/bridge.lua` returns true. The jammer needs no item, and any player can start the install at a tower.
 
 ### pma-voice patch (2 additions, kept minimal)
 1. **Listen-only channels.** New server exports `addRadioListener(source, channel, withAudio)` and `removeRadioListener(source, channel)`. When `withAudio` is true, the listener gets talk events and the talker adds the listener through `addVoiceTargets`. When `withAudio` is false, the listener gets talk events only, and the talker does not add the listener as a voice target. `signal_radio` sets `withAudio` to false for keyless listeners on encrypted talkgroups.
@@ -86,20 +86,20 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 
 ## Feature design
 - **Talkgroups:** Per-department talkgroups for QPS, QAS, QFD and RFSQ. One interop talkgroup for all four departments. One command talkgroup for senior ranks per department. All are encrypted with one shared key, and every emergency radio can switch between the departments' talkgroups.
-- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. The handset's side button also transmits. `addRadioDisableBit` cuts a transmission when the channel is busy, as a short pulse. Step 7 adds the no-signal block.
+- **Push-to-talk:** Keep pma-voice's `+radiotalk` keybind. The binding also works while the radio is open, because the handset uses `SetNuiFocusKeepInput` and blocks other game controls. Other resources' key bindings can also fire while it is open. The handset's side button also transmits. `addRadioDisableBit` cuts a transmission when the channel is busy or the radio has no signal, as a short pulse.
 - **Half-duplex:** The server tracks each channel's active talker. Clients block locally and play a busy tone. If two key up together, the server keeps the first and the loser is cut off. `radio.priority` overrides the block.
 - **Scan:** Each player chooses what their radio scans, from any talkgroup their radio can use. The codeplug sets the starting list. The server validates each choice and saves it per player and department. The Scan key opens a list with an on or off row, then every talkgroup with a tick. Primary channel transmits. Scanned channels are heard through listeners at 60% volume, all at once. Scan starts off after a reconnect.
-- **Signal:** Client computes the best tower every 1–2 seconds, using distance, jam state and a vehicle bonus. It publishes only tier changes (full, worn, bad, none) in a state bag.
+- **Signal:** Client computes the best tower every 1.5 seconds, using distance, jam state and a vehicle bonus. It sends only tier changes (full, worn, bad, none) to the server, which passes the talker's tier to receivers with each transmission. With no towers configured, every radio has full signal.
 - **Signal audio:** Three custom submixes. The receiver uses the worse of talker and own tier. Tier none mutes receive and blocks transmit. Dispatch consoles ignore signal.
-- **Towers:** Replicated from the server. Admin commands place towers and show their radius. Place towers so coverage overlaps. One jammed tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
-- **Jammer:** A player walks up to a tower and interacts with it. The player then stays in an animation for 120 seconds before the jammer takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the install, and no cooldown starts. Only one player can install on a tower at a time. Once the jammer takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be jammed again for 30 minutes, counted from when the jammer took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a jam. Every jam is logged (who, which tower, when) and sends an alert to online staff.
-- **Fireground channel:** One short-range simplex channel for RFSQ. It works without a tower and ignores signal tiers. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance. A talker outside the receiver's OneSync scope counts as out of range.
+- **Towers:** Replicated from the server. `/radio_tower` adds, removes, resizes, clears and lists towers, and needs `radio.admin`. `/radio_tower_debug` shows each radius on the map. `config/towers.lua` holds nine placeholder sites. TODO: replace them with real sites. Place towers so coverage overlaps. One jammed tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
+- **Jammer:** The jammer needs no item. Any player can walk up to a tower and press E at its marker. The player then stays in an animation for 120 seconds before the jammer takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the install, and no cooldown starts. Only one player can install on a tower at a time. Once the jammer takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be jammed again for 30 minutes, counted from when the jammer took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a jam. Every jam is logged (who, which tower, when) and sends an alert to online staff.
+- **Fireground channel:** One short-range simplex talkgroup in the RFSQ zone, with a 500 metre range set in `config/talkgroups.lua`. It works without a tower and ignores signal tiers. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance. A talker outside the receiver's OneSync scope counts as out of range.
 - **Emergency:** Panic with cooldown, tone on the talkgroup and priority for the sender. Man-down alert after a configurable delay.
   - Radio panic also triggers the Night Shifts panic for that player, so the marker shows on the MDT map. TODO: confirm that the panic command can run for a given player from another resource.
   - Night Shifts panic fires the `signal_radio` hook event, so the radio plays the panic tone and gives the sender priority.
   - Man-down sends a call to the MDT through `ForwardCallToMDT`.
 - **GPS (optional):** Build this only if the Night Shifts map does not meet the need. Server-side OneSync positions, batched every 2 seconds, sent only to codeplugs with GPS visibility.
-- **Handset UI:** Zone and talkgroup selection, talker display, signal bars, member list, scan list, panic and draggable position. Each skin is a photo with a live screen and clickable zones over the real controls. Signal bars show full until step 7. The radio's up and down keys move a highlight through any list. Select or Enter chooses the highlighted row. A status strip stays on screen when the radio is put away.
+- **Handset UI:** Zone and talkgroup selection, talker display, signal bars, member list, scan list, panic and draggable position. Each skin is a photo with a live screen and clickable zones over the real controls. Signal bars show the current tier. The radio's up and down keys move a highlight through any list. Select or Enter chooses the highlighted row. A status strip stays on screen when the radio is put away.
 - **Skins:** QPS and QAS use the APX 2000. QFD and RFSQ use the APX 8000XE in hi-vis. Civilians use the UV-5R. Each codeplug sets its skin in `config/codeplugs.lua`.
 - **Dispatch console (`/dispatch`, `radio.dispatch`):** Transmit on a selected talkgroup and monitor others. Tone-outs, talkgroup patching, moving a unit, and a transmission log (who, where, when, with no audio recording).
 - **Emergency frequency mode:** Every emergency radio has every zone. The Zone list also has a Frequency option. In frequency mode, an emergency radio tunes by frequency like a civilian radio, and can talk to civilians on a clear frequency. Dialling an emergency frequency joins that talkgroup with clear audio. A command frequency stays encrypted for radios that are not senior. Scan pauses in frequency mode. Choosing a zone returns the radio to zone mode.
@@ -115,7 +115,7 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - Signal tiers still apply. Tier none stops the noise loop too.
   - Do not use a distortion submix for this. A submix still sends the real voice to the client, and a modified client can remove the submix.
   - Use case: a civilian who tunes to an emergency frequency hears only noise.
-- **Tones:** The handset generates its tones for grant, release, busy, power, receive and panic. Step 7 adds a no-signal tone. pma mic clicks set to 0 so sounds don't double up.
+- **Tones:** The handset generates its tones for grant, release, busy, power, receive and panic. A no-signal block uses the busy tone. pma mic clicks set to 0 so sounds don't double up.
 
 ## Server config
 ```
@@ -144,12 +144,12 @@ Status at 2026-11-10.
 | Step | Status |
 | --- | --- |
 | 1. Voice proof | Done. All seven in-game tests passed. |
-| 2. Core radio | Built. Waiting on the in-game test. Dev profiles stand in for Night Shifts. |
-| 3. Handset UI | Built. Waiting on the in-game test. |
+| 2. Core radio | Working in-game. Dev profiles stand in for Night Shifts. |
+| 3. Handset UI | Working in-game. |
 | 4. Night Shifts integration and emergency | Radio-side panic is built. The rest needs the Night Shifts export names. |
-| 5. Scan, civilian radios and encryption | Built. Waiting on the in-game test. Spectator mode is still open. |
+| 5. Scan, civilian radios and encryption | Working in-game. Spectator mode is still open. |
 | 6. Dispatch console | Not started. |
-| 7. Towers | Not started. |
+| 7. Towers | Built ahead of steps 4 and 6. Waiting on the in-game test in `docs/test_towers.md`. |
 | 8. Hardening | Not started. |
 
 Emergency frequency mode, all-zone access and chosen scan lists are built as part of steps 2, 3 and 5. The in-game test for this build is `docs/test_core_radio.md`.

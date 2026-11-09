@@ -121,6 +121,41 @@ RegisterCommand('vp_spot', function(_, args)
 	say(('Moved to test spot %s and frozen in place.'):format(args[1]))
 end, false)
 
+-- /vp_goto <x> <y> [z]: moves you there and freezes you in place, for signal range tests.
+RegisterCommand('vp_goto', function(_, args)
+	local x, y, z = tonumber(args[1]), tonumber(args[2]), tonumber(args[3]) or 60.0
+	if not x or not y then return say('Use /vp_goto <x> <y> [z].') end
+	local ped = PlayerPedId()
+	SetEntityCoordsNoOffset(ped, x + 0.0, y + 0.0, z + 0.0, false, false, false)
+	FreezeEntityPosition(ped, true)
+	say(('Moved to %d, %d and frozen. /vp_spot off releases you.'):format(x, y))
+end, false)
+
+-- /vp_tower <id>: stands you on the ground beside a tower, for jammer tests.
+RegisterCommand('vp_tower', function(_, args)
+	local tower
+	for _, candidate in ipairs(Radio.towers) do
+		if candidate.id == args[1] then tower = candidate end
+	end
+	if not tower then return say('Unknown tower. /radio_tower list shows the ids.') end
+	CreateThread(function()
+		local ped = PlayerPedId()
+		local x, y = tower.x + 1.5, tower.y
+		FreezeEntityPosition(ped, true)
+		SetEntityCoordsNoOffset(ped, x, y, tower.z + 50.0, false, false, false)
+		local found, ground = false, tower.z
+		for _ = 1, 100 do
+			RequestCollisionAtCoord(x, y, tower.z)
+			found, ground = GetGroundZFor_3dCoord(x, y, 1000.0, false)
+			if found then break end
+			Wait(50)
+		end
+		SetEntityCoordsNoOffset(ped, x, y, (found and ground or tower.z) + 1.0, false, false, false)
+		FreezeEntityPosition(ped, false)
+		say(('Moved beside tower %s.'):format(tower.id))
+	end)
+end, false)
+
 -- /vp_call <call number, or 0 to leave>
 RegisterCommand('vp_call', function(_, args)
 	local call = tonumber(args[1])

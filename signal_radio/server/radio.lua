@@ -219,6 +219,7 @@ function RefreshSession(source)
 			mode = codeplug.civilian and 'frequency' or 'zone',
 			frequency = Config.Civilian.defaultFrequency,
 			scanning = false,
+			signal = 'full',
 			scanKey = scanKey,
 			scanList = loadScanList(codeplug, scanKey),
 			listening = {},
