@@ -1,5 +1,6 @@
 local CANCEL_CONTROL = 73
-local INTERACT_CONTROL = 38
+local INTERACT_CONTROL = 51
+local START_REPLY_WAIT_MS = 3000
 local SABOTAGE_SCENARIO = 'WORLD_HUMAN_WELDING'
 local MAX_SABOTAGE_DRIFT = 1.5
 local NEAR_TOWER_DISTANCE = 30.0
@@ -14,6 +15,7 @@ local REFUSAL_TEXT = {
 
 local canSabotageTower = false
 local sabotaging = false
+local awaitingStartUntil = 0
 local debugBlips = {}
 local debugEnabled = false
 
@@ -56,14 +58,18 @@ end)
 
 RegisterNetEvent('signal_radio:towerStatus', function(label, online)
 	SendToHandset('towerStatus', { label = label, online = online })
+	notify(('%s tower %s'):format(label, online and 'back online' or 'offline'))
 end)
 
 RegisterNetEvent('signal_radio:sabotageRefused', function(reason)
-	sabotaging = false
+	awaitingStartUntil = 0
+	-- 'in_use' can only refer to someone else, or a press that overlapped this player's own attempt.
+	if reason ~= 'in_use' then sabotaging = false end
 	notify(REFUSAL_TEXT[reason] or 'Sabotage stopped.')
 end)
 
 RegisterNetEvent('signal_radio:sabotageStarted', function(towerId, seconds)
+	awaitingStartUntil = 0
 	sabotaging = true
 	local ped = PlayerPedId()
 	local start = GetEntityCoords(ped)
@@ -118,7 +124,8 @@ CreateThread(function()
 				DrawMarker(1, tower.x, tower.y, (found and groundZ or coords.z - 1.0), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 1.5, 0.6, 228, 96, 26, 140, false, false, 2, false, nil, nil, false)
 				if distance <= Config.Sabotage.interactDistance then
 					showHelp(('Press ~INPUT_CONTEXT~ to sabotage %s.'):format(tower.label))
-					if IsControlJustPressed(0, INTERACT_CONTROL) then
+					if IsControlJustPressed(0, INTERACT_CONTROL) and GetGameTimer() >= awaitingStartUntil then
+						awaitingStartUntil = GetGameTimer() + START_REPLY_WAIT_MS
 						TriggerServerEvent('signal_radio:sabotageStart', tower.id)
 					end
 				end

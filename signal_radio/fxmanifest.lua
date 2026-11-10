@@ -12,6 +12,7 @@ shared_scripts {
 	'config/talkgroups.lua',
 	'config/codeplugs.lua',
 	'config/towers.lua',
+	'config/night_shifts.lua',
 }
 
 server_scripts {
@@ -42,5 +43,7 @@ files {
 	'web/handset/app.js',
 	'web/handset/mock.js',
 	'web/handset/skin.js',
-	'web/handset/skins/*',
+	'web/handset/skins/apx2000_hd.png',
+	'web/handset/skins/apx8000xe_fire_hd.png',
+	'web/handset/skins/uv5r.webp',
 }

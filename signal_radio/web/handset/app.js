@@ -67,6 +67,7 @@ const tones = {
 /* Looping band-limited noise for encrypted traffic. */
 let noiseSource;
 function setEncrypted(active) {
+	if (active === app.encrypted) return;
 	app.encrypted = active;
 	if (noiseSource) {
 		noiseSource.stop();
@@ -117,7 +118,7 @@ function tuneTo(kilohertz) {
 function pressDigit(digit) {
 	if (!app.state.power) return;
 	if (!app.state.tuning) {
-		if (digit > 0) window.radioHandset.selectChannel(digit);
+		if (digit > 0 && app.view === 'main') window.radioHandset.selectChannel(digit);
 		return;
 	}
 	app.view = 'main';
@@ -301,6 +302,11 @@ function listRows() {
 	return [...$('list').querySelectorAll('.lcd-row')];
 }
 
+function listSignature() {
+	const { state } = app;
+	return JSON.stringify([app.view, app.listCursor, state.scanning, state.scanList, state.tuning, state.talkgroup, state.frequency, state.zones, app.memberLists[state.talkgroup]]);
+}
+
 function applyListCursor() {
 	const list = $('list');
 	const rows = listRows();
@@ -356,10 +362,15 @@ function render() {
 	$('viewMain').hidden = listing;
 	$('viewList').hidden = !listing;
 	if (listing) {
-		renderList();
-		applyListCursor();
+		/* Rebuilding rows on every message would lose clicks and undo mouse scrolling. */
+		if (listSignature() !== app.listRendered) {
+			renderList();
+			applyListCursor();
+			app.listRendered = listSignature();
+		}
 	} else {
 		app.listCursorView = null;
+		app.listRendered = null;
 	}
 
 	if (!state.available) {
@@ -385,7 +396,7 @@ function render() {
 	message.replaceChildren();
 	if (!state.available) {
 		message.hidden = false;
-		message.textContent = 'Start a shift in the MDT to use your radio.';
+		message.textContent = 'Radio unavailable.';
 	} else if (app.alert && on) {
 		message.hidden = false;
 		const title = document.createElement('strong');
@@ -481,7 +492,12 @@ function placeHandset() {
 const handlers = {
 	open(data) {
 		app.open = data.open;
-		if (!data.open) app.view = 'main';
+		if (!data.open) {
+			app.view = 'main';
+			pttDown = false;
+			$('ptt').classList.remove('is-down');
+			dragging = null;
+		}
 		if (data.open) placeHandset();
 		render();
 	},
@@ -554,8 +570,8 @@ const handlers = {
 		app.alertTimer = setTimeout(() => { app.alert = null; render(); }, 8000);
 		render();
 	},
-	panicRefused() {
-		showMessage('Wait before sending another emergency.');
+	panicRefused(data) {
+		showMessage(data.reason === 'no_channel' ? 'Tune to a channel first.' : 'Wait before sending another emergency.');
 	},
 };
 
@@ -567,7 +583,7 @@ window.addEventListener('message', (event) => {
 $('power').onclick = () => post('power', { on: !app.state.power });
 $('power').onwheel = (event) => { if (app.state.power) stepVolume(event.deltaY > 0 ? -1 : 1); };
 $('channelKnob').onclick = () => stepChannel(1);
-$('channelKnob').onwheel = (event) => stepChannel(event.deltaY > 0 ? 1 : -1);
+$('channelKnob').onwheel = (event) => { if (app.state.power) stepChannel(event.deltaY > 0 ? 1 : -1); };
 /* Radios without separate up and down keys use their channel keys for lists. */
 function channelKey(listDirection, channelDirection) {
 	if (app.view === 'main') stepChannel(channelDirection);
@@ -579,14 +595,15 @@ $('volumeDown').onclick = () => { if (!moveListCursor(1)) stepVolume(-1); };
 $('volumeUp').onclick = () => { if (!moveListCursor(-1)) stepVolume(1); };
 $('close').onclick = () => post('close');
 
-/* The emergency button needs a deliberate hold with a pointer. Keyboard activation is immediate. */
+/* The emergency button needs a deliberate hold, so a stray click or key press cannot send one. */
 let holdTimer, holdFrame;
 function clearHold() {
 	clearTimeout(holdTimer);
 	cancelAnimationFrame(holdFrame);
 	$('panic').style.setProperty('--hold', '0%');
 }
-$('panic').onpointerdown = () => {
+$('panic').onpointerdown = (event) => {
+	if (event.button !== 0 || !app.state.power) return;
 	const started = performance.now();
 	const animate = (now) => {
 		$('panic').style.setProperty('--hold', `${Math.min(100, ((now - started) / HOLD_EMERGENCY_MS) * 100)}%`);
@@ -600,7 +617,6 @@ $('panic').onpointerdown = () => {
 };
 $('panic').onpointerup = clearHold;
 $('panic').onpointerleave = clearHold;
-$('panic').onclick = (event) => { if (event.detail === 0) post('panic'); };
 
 let pttDown = false;
 function setPtt(down) {
@@ -609,7 +625,7 @@ function setPtt(down) {
 	$('ptt').classList.toggle('is-down', down);
 	post('ptt', { down });
 }
-$('ptt').onpointerdown = () => setPtt(true);
+$('ptt').onpointerdown = (event) => { if (event.button === 0 && app.state.power) setPtt(true); };
 window.addEventListener('pointerup', () => setPtt(false));
 window.addEventListener('blur', () => setPtt(false));
 
@@ -619,6 +635,7 @@ $('grip').onpointerdown = (event) => {
 	$('grip').setPointerCapture(event.pointerId);
 };
 $('grip').onpointermove = (event) => {
+	if (dragging && event.buttons === 0) dragging = null;
 	if (dragging) applyPosition(event.clientX - dragging.dx, event.clientY - dragging.dy);
 };
 $('grip').onpointerup = () => {

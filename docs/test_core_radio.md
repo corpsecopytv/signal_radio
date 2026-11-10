@@ -271,6 +271,14 @@ A presses Left Alt once to clear the key. Both clients run `/radio_dev qps` agai
 - [ ] A and B can talk normally on OPS 1.
 - [ ] Neither client has a stuck radio effect on normal voice.
 
+Hold your radio key on A with the radio open, and click the power knob off. Release the key, then turn the radio back on.
+
+- [ ] A's mic stops when the radio turns off, and A can transmit normally afterwards.
+
+Hold your radio key on A, and change channel with the D-pad. Release the key.
+
+- [ ] A stops transmitting when the channel changes, and can transmit normally afterwards.
+
 Close B's client while it is on a channel.
 
 - [ ] The server console shows no errors.

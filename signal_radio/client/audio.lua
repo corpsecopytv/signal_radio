@@ -66,6 +66,10 @@ end
 local function resolveRadioAudio(talker, listenerChannel)
 	local bleedVolume = listenerChannel and Radio.bleed[listenerChannel]
 	if bleedVolume then
+		local distance = distanceToTalker(talker)
+		if distance and distance <= Config.Bleed.naturalVoiceRange then
+			return { proximity = true }
+		end
 		return { submix = 'sr_bleed', volume = bleedVolume }
 	end
 

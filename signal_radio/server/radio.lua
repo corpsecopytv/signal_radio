@@ -8,10 +8,15 @@ local function identifierFor(source)
 	return GetPlayerIdentifierByType(source, 'license')
 end
 
-local function callsignFor(source)
+local function callsignFor(source, profile)
+	if profile and profile.callsign then return profile.callsign end
 	local license = identifierFor(source)
 	local saved = license and GetResourceKvpString(('callsign:%s'):format(license))
 	return saved or ('Unit %d'):format(source)
+end
+
+local function profileKeyFor(profile)
+	return profile and ('%s:%s'):format(profile.department, profile.senior == true) or 'none'
 end
 
 local function scanListToArray(scanList)
@@ -100,12 +105,15 @@ local function syncScan(session)
 			pma:removeRadioListener(source, TalkgroupsById[talkgroupId].channel)
 			session.listening[talkgroupId] = nil
 			setSetMember(TalkgroupScanners, talkgroupId, source, false)
+			ForgetBleedListener(talkgroupId, source)
+			SendTalkersStopped(source, talkgroupId)
 		end
 	end
 	for talkgroupId in pairs(wanted) do
 		if not session.listening[talkgroupId] and pma:addRadioListener(source, TalkgroupsById[talkgroupId].channel, true) then
 			session.listening[talkgroupId] = true
 			setSetMember(TalkgroupScanners, talkgroupId, source, true)
+			SendActiveTalkers(source, talkgroupId)
 		end
 	end
 end
@@ -114,6 +122,7 @@ local function leaveTalkgroup(session)
 	local current = session.talkgroup
 	if not current or not (TalkgroupMembers[current] or {})[session.source] then return end
 	ClearTalker(session)
+	SendTalkersStopped(session.source, current)
 	setSetMember(TalkgroupMembers, current, session.source, false)
 	broadcastMembers(current)
 end
@@ -131,6 +140,8 @@ local function joinTalkgroup(session, talkgroupId)
 	setSetMember(TalkgroupMembers, talkgroupId, source, true)
 	syncScan(session)
 	broadcastMembers(talkgroupId)
+	-- The radio must know its new channel before it hears who is already talking.
+	SendState(source)
 	SendActiveTalkers(source, talkgroupId)
 	return true
 end
@@ -161,6 +172,7 @@ local function tuneFrequency(session, frequency)
 	end
 	if emergency then
 		pma:setPlayerRadio(source, 0)
+		SendState(source)
 		if pma:addRadioListener(source, emergency.channel, false) then
 			session.encryptedChannel = emergency.channel
 		end
@@ -173,6 +185,7 @@ local function tuneFrequency(session, frequency)
 	session.talkgroup = id
 	setSetMember(TalkgroupMembers, id, source, true)
 	broadcastMembers(id)
+	SendState(source)
 	SendActiveTalkers(source, id)
 end
 
@@ -195,9 +208,10 @@ local function firstTalkgroup(codeplug)
 end
 
 --- Rebuilds a player's radio from their current profile.
---- Night Shifts shift changes must call this when the integration lands in step 4.
 function RefreshSession(source)
 	local existing = Sessions[source]
+	-- Clients only report signal changes, so a rebuilt session must keep the last value.
+	local previousSignal = existing and existing.signal or 'full'
 	if existing then
 		powerOff(existing)
 		Sessions[source] = nil
@@ -219,17 +233,36 @@ function RefreshSession(source)
 			mode = codeplug.civilian and 'frequency' or 'zone',
 			frequency = Config.Civilian.defaultFrequency,
 			scanning = false,
-			signal = 'full',
+			signal = previousSignal,
 			scanKey = scanKey,
 			scanList = loadScanList(codeplug, scanKey),
 			listening = {},
-			callsign = callsignFor(source),
+			callsign = callsignFor(source, profile),
+			mdtCallsign = profile ~= nil and profile.callsign ~= nil,
+			profileKey = profileKeyFor(profile),
 			priority = IsPlayerAceAllowed(source, 'radio.priority'),
 			lastPanic = nil,
 			panicUntil = 0,
+			lastManDown = nil,
 		}
 	end
 	SendState(source)
+end
+
+--- Applies the latest Night Shifts read to a player's radio.
+--- A new department or the end of a shift rebuilds the radio. A new callsign does not.
+function ApplyRadioProfile(source, profile)
+	local session = Sessions[source]
+	if not session then return end
+	if session.profileKey ~= profileKeyFor(profile) then
+		return RefreshSession(source)
+	end
+	session.mdtCallsign = profile ~= nil and profile.callsign ~= nil
+	if session.mdtCallsign and session.callsign ~= profile.callsign then
+		session.callsign = profile.callsign
+		broadcastMembers(session.talkgroup)
+		SendState(source)
+	end
 end
 
 RegisterNetEvent('signal_radio:hello', function()
@@ -315,31 +348,66 @@ RegisterNetEvent('signal_radio:setScanTalkgroup', function(talkgroupId, enabled)
 	SendState(source)
 end)
 
-RegisterNetEvent('signal_radio:panic', function()
-	local source = source
-	local session = Sessions[source]
-	if not session or not session.power or session.codeplug.civilian then return end
-
+--- Sends a panic to everyone on the radio's channel.
+--- @return boolean sent false during the panic cooldown
+local function sendRadioPanic(session)
 	local now = GetGameTimer()
 	if session.lastPanic and now - session.lastPanic < Config.PanicCooldownMs then
-		return TriggerClientEvent('signal_radio:panicRefused', source)
+		return false
 	end
 	session.lastPanic = now
 	session.panicUntil = now + Config.PanicPriorityMs
 
-	-- TODO: confirm in Night Shifts docs: trigger the MDT panic for this player here.
 	local talkgroupId = session.talkgroup
 	local talkgroup = TalkgroupsById[talkgroupId]
 	local label = talkgroup and talkgroup.label or ('%.3f'):format(session.frequency / 1000)
 	ForEachTalkgroupTarget(talkgroupId, function(target)
-		TriggerClientEvent('signal_radio:panic', target, talkgroupId, label, session.callsign, source)
+		TriggerClientEvent('signal_radio:panic', target, talkgroupId, label, session.callsign, session.source)
 	end)
+	return true
+end
+
+RegisterNetEvent('signal_radio:panic', function()
+	local source = source
+	local session = Sessions[source]
+	if not session or not session.power or session.codeplug.civilian then return end
+	if not session.talkgroup then
+		return TriggerClientEvent('signal_radio:panicRefused', source, 'no_channel')
+	end
+	if not sendRadioPanic(session) then
+		return TriggerClientEvent('signal_radio:panicRefused', source)
+	end
+	SendMdtPanic(source)
+end)
+
+--- Plays a panic that started on the MDT. A radio that is off or on no channel stays silent.
+function SendRadioPanicFromMdt(source)
+	local session = Sessions[source]
+	if session and session.power and session.talkgroup and not session.codeplug.civilian then
+		sendRadioPanic(session)
+	end
+end
+
+RegisterNetEvent('signal_radio:manDown', function()
+	local source = source
+	local session = Sessions[source]
+	if not session or not session.power or session.codeplug.civilian then return end
+	if GetEntityHealth(GetPlayerPed(source)) > 100 then return end
+
+	local now = GetGameTimer()
+	if session.lastManDown and now - session.lastManDown < Config.NightShifts.manDown.cooldownMs then return end
+	if SendMdtManDown(source, session.callsign) then
+		session.lastManDown = now
+	end
 end)
 
 RegisterCommand('callsign', function(source, args)
 	local session = Sessions[source]
 	local license = source ~= 0 and identifierFor(source)
 	if not license then return end
+	if session and session.mdtCallsign then
+		return TriggerClientEvent('chat:addMessage', source, { args = { 'Radio', 'Your callsign comes from the MDT while you are on shift.' } })
+	end
 	local callsign = table.concat(args, ' '):gsub('[^%w%- ]', ''):sub(1, 12)
 	if callsign == '' then return end
 

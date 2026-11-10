@@ -1,0 +1,143 @@
+signal_radio upgrade patch for pma-voice
+Use this only on a pma-voice that already has the earlier signal_radio.patch.
+A fresh pma-voice 7.0.1 needs only signal_radio.patch.
+Apply from inside the pma-voice folder:
+  git apply --ignore-whitespace path/to/signal_radio_upgrade_1.patch
+If pma-voice sits inside another git repository, git apply can skip every file and print nothing.
+In that case, run it from that repository's root and add --directory=path/to/pma-voice.
+
+diff --git a/client/init/main.lua b/client/init/main.lua
+index d8a5d4d..168505b 100644
+--- a/client/init/main.lua
++++ b/client/init/main.lua
+@@ -201,7 +201,6 @@ function toggleVoice(plySource, enabled, moduleType, listenerChannel)
+ 		if moduleType == 'radio' and radioAudioResolver and applyResolvedRadioAudio(plySource, listenerChannel) then
+ 			return
+ 		end
+-		print(volumes[moduleType])
+ 		MumbleSetVolumeOverrideByServerId(plySource, enabled and volumes[moduleType])
+ 		if GetConvarInt('voice_enableSubmix', 1) == 1 then
+ 			if moduleType then
+diff --git a/client/module/radio.lua b/client/module/radio.lua
+index b70ebff..a8e2e4c 100644
+--- a/client/module/radio.lua
++++ b/client/module/radio.lua
+@@ -1,4 +1,13 @@
+ local radioChannel = 0
++
++-- signal_radio patch: a talker who stops on the radio may still be on a phone call
++local function setRadioTalkerVoice(talker, talking, listenerChannel)
++	if not talking and callData[talker] then
++		toggleVoice(talker, true, 'call')
++	else
++		toggleVoice(talker, talking, 'radio', listenerChannel)
++	end
++end
+ local radioNames = {}
+ local disableRadioAnim = false
+ local radioAnim = {
+@@ -50,9 +59,8 @@ function setTalkingOnRadio(plySource, enabled)
+ 
+ 	if not isRadioEnabled() then return logger.info("[radio] Ignoring setTalkingOnRadio. radioEnabled: %s disableRadio: %s", radioEnabled, LocalPlayer.state.disableRadio) end
+ 	-- If we're on a call we don't want to toggle their voice disabled this will break calls.
+-	local enabled = enabled or callData[plySource]
+-	toggleVoice(plySource, enabled, 'radio')
+-	playMicClicks(enabled)
++	setRadioTalkerVoice(plySource, enabled)
++	playMicClicks(enabled or callData[plySource])
+ end
+ RegisterNetEvent('pma-voice:setTalkingOnRadio', setTalkingOnRadio)
+ 
+@@ -80,7 +88,7 @@ function removePlayerFromRadio(plySource)
+ 		logger.info('[radio] Left radio %s, cleaning up.', radioChannel)
+ 		for tgt, _ in pairs(radioData) do
+ 			if tgt ~= playerServerId then
+-				toggleVoice(tgt, false, 'radio')
++				setRadioTalkerVoice(tgt, false)
+ 			end
+ 		end
+ 		sendUIMessage({
+@@ -90,16 +98,18 @@ function removePlayerFromRadio(plySource)
+ 		radioNames = {}
+ 		radioData = {}
+ 		radioListenerTargets = {}
++		MumbleClearVoiceTargetPlayers(voiceTarget)
+ 		addVoiceTargets(callData)
+ 	else
+-		toggleVoice(plySource, false, 'radio')
++		setRadioTalkerVoice(plySource, false)
++		radioData[plySource] = nil
+ 		if radioPressed then
+ 			logger.info('[radio] %s left radio %s while we were talking, updating targets.', plySource, radioChannel)
++			MumbleClearVoiceTargetPlayers(voiceTarget)
+ 			addVoiceTargets(radioData, radioListenerTargets, callData)
+ 		else
+ 			logger.info('[radio] %s has left radio %s', plySource, radioChannel)
+ 		end
+-		radioData[plySource] = nil
+ 		if GetConvarInt("voice_syncPlayerNames", 0) == 1 then
+ 			radioNames[plySource] = nil
+ 		end
+@@ -212,7 +222,7 @@ RegisterCommand('+radiotalk', function()
+ 				local checkFailed = false
+ 				while radioPressed do
+ 					local ped = PlayerPedId()
+-					if radioChannel < 0 or isDead() or not isRadioEnabled() or (GetConvarBool("voice_disableRadioWhenShooting", false) and IsPedShooting(ped)) then
++					if radioChannel <= 0 or isDead() or not isRadioEnabled() or (GetConvarBool("voice_disableRadioWhenShooting", false) and IsPedShooting(ped)) then
+ 						checkFailed = true
+ 						break
+ 					end
+@@ -245,7 +255,8 @@ RegisterCommand('+radiotalk', function()
+ end, false)
+ 
+ RegisterCommand('-radiotalk', function()
+-	if radioChannel > 0 and radioPressed then
++	-- signal_radio patch: always release, because the channel can drop to 0 during a transmission
++	if radioPressed then
+ 		radioPressed = false
+ 		MumbleClearVoiceTargetPlayers(voiceTarget)
+ 		addVoiceTargets(callData)
+@@ -255,7 +266,9 @@ RegisterCommand('-radiotalk', function()
+ 		if GetConvarInt('voice_enableRadioAnim', 1) == 1 then
+ 			StopAnimTask(PlayerPedId(), radioAnim.dict, radioAnim.anim, -4.0)
+ 		end
+-		TriggerServerEvent('pma-voice:setTalkingOnRadio', false)
++		if radioChannel > 0 then
++			TriggerServerEvent('pma-voice:setTalkingOnRadio', false)
++		end
+ 	end
+ end, false)
+ if gameVersion == 'fivem' then
+@@ -319,12 +332,12 @@ RegisterNetEvent('pma-voice:radioListenerTalking', function(channel, talker, tal
+ 	end
+ 	-- always process a stop, or a disable bit would leave the talker stuck on radio audio
+ 	if talking and not isRadioEnabled() then return end
+-	toggleVoice(talker, talking or callData[talker], 'radio', channel)
++	setRadioTalkerVoice(talker, talking, channel)
+ end)
+ 
+ RegisterNetEvent('pma-voice:radioListenerRemoved', function(channel)
+ 	for talker, _ in pairs(listenedTalkers[channel] or {}) do
+-		toggleVoice(talker, callData[talker], 'radio', channel)
++		setRadioTalkerVoice(talker, false, channel)
+ 	end
+ 	listenedTalkers[channel] = nil
+ end)
+@@ -332,8 +345,16 @@ end)
+ --- Reapplies radio audio for every talker. Call it after the resolver's answers change,
+ --- and after removing a disable bit, because pma-voice ignores talk events while a bit is set.
+ function refreshRadioAudio()
++	if not isRadioEnabled() then
++		-- only process stops while a disable bit is held, as setTalkingOnRadio does
++		for tgt, _ in pairs(radioData) do
++			if tgt ~= playerServerId then
++				setRadioTalkerVoice(tgt, false)
++			end
++		end
++		return
++	end
+ 	handleRadioAndCallInit()
+-	if not isRadioEnabled() then return end
+ 	for channel, talkers in pairs(listenedTalkers) do
+ 		for talker, _ in pairs(talkers) do
+ 			toggleVoice(talker, true, 'radio', channel)

@@ -18,10 +18,17 @@ local function channelOf(talkgroupId)
 	return tonumber(talkgroupId:match('^freq:(%d+)$'))
 end
 
-local function canReceive(talker, receiver, talkgroup, distance)
+function CanRadioReceive(talker, receiver, talkgroup, distance)
 	if talkgroup and talkgroup.simplex then return distance <= talkgroup.range end
 	if distance < Config.Signal.directRange then return true end
 	return talker.signal ~= 'none' and receiver.signal ~= 'none'
+end
+
+--- @return number distance between two players, or math.huge when either has no ped
+function RadioDistance(first, second)
+	local firstPed, secondPed = GetPlayerPed(first), GetPlayerPed(second)
+	if not firstPed or firstPed == 0 or not secondPed or secondPed == 0 then return math.huge end
+	return distanceBetween(GetEntityCoords(firstPed), GetEntityCoords(secondPed))
 end
 
 local function hasOwnRadioAudio(talkgroupId, source)
@@ -36,6 +43,7 @@ local function findReceivingRadios(talkgroupId, positions)
 		local receiver = Sessions[target]
 		local here = positions[target]
 		if not receiver or not here or Talkers[talkgroupId][target] then return end
+		local receives = false
 		for talkerId in pairs(Talkers[talkgroupId]) do
 			local there = positions[talkerId]
 			if there then
@@ -43,16 +51,16 @@ local function findReceivingRadios(talkgroupId, positions)
 				if distance > SEND_DISTANCE_BEYOND then
 					TriggerClientEvent('signal_radio:talkerDistance', target, talkerId, distance)
 				end
-				if canReceive(Sessions[talkerId], receiver, talkgroup, distance) then
-					radios[#radios + 1] = here
-					break
-				end
+				receives = receives or CanRadioReceive(Sessions[talkerId], receiver, talkgroup, distance)
 			end
+		end
+		if receives then
+			radios[#radios + 1] = { position = here, bucket = GetPlayerRoutingBucket(target) }
 		end
 	end)
 	-- Set only by the dev command /vp_bleedtest, because one person cannot be three players.
 	if BleedTestRadio then
-		radios[#radios + 1] = BleedTestRadio
+		radios[#radios + 1] = { position = BleedTestRadio }
 	end
 	return radios
 end
@@ -70,9 +78,12 @@ local function findBystanders(talkgroupId, channel, radios, positions)
 		local onThisEncryptedChannel = session and session.encryptedChannel == channel
 		if not hasOwnRadioAudio(talkgroupId, source) and not onThisEncryptedChannel then
 			local nearest = nil
+			local bucket = GetPlayerRoutingBucket(source)
 			for _, radio in ipairs(radios) do
-				local distance = distanceBetween(here, radio)
-				if not nearest or distance < nearest then nearest = distance end
+				if radio.bucket == nil or radio.bucket == bucket then
+					local distance = distanceBetween(here, radio.position)
+					if not nearest or distance < nearest then nearest = distance end
+				end
 			end
 			if nearest and nearest <= Config.Bleed.range then
 				wanted[source] = bleedVolume(nearest)
@@ -83,12 +94,21 @@ local function findBystanders(talkgroupId, channel, radios, positions)
 end
 
 local function releaseBystander(talkgroupId, channel, source)
-	-- A player who now hears this on their own radio keeps that listener.
-	if not hasOwnRadioAudio(talkgroupId, source) then
+	-- A player who now hears this on their own radio, or plays its encrypted noise, keeps that listener.
+	local session = Sessions[source]
+	local keepsNoiseListener = session and session.encryptedChannel == channel
+	if not hasOwnRadioAudio(talkgroupId, source) and not keepsNoiseListener then
 		pma:removeRadioListener(source, channel)
 	end
 	TriggerClientEvent('signal_radio:bleed', source, channel, nil)
 	bleeding[talkgroupId][source] = nil
+end
+
+--- Call when another feature removes this player's listener, so bleed can add it again.
+function ForgetBleedListener(talkgroupId, source)
+	if bleeding[talkgroupId] then
+		bleeding[talkgroupId][source] = nil
+	end
 end
 
 local function stopBleed(talkgroupId)

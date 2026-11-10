@@ -288,8 +288,16 @@
 		requested = chosen;
 		if (!rendered[chosen]) {
 			const image = await loadImage(skins[chosen].image);
-			if (!image) return;
-			rendered[chosen] = renderArt(skins[chosen], image);
+			try {
+				if (image) rendered[chosen] = renderArt(skins[chosen], image);
+			} catch (error) {
+				console.error('Could not draw radio skin', chosen, error);
+			}
+			/* Allow another try on the next state update. */
+			if (!rendered[chosen]) {
+				if (requested === chosen) requested = null;
+				return;
+			}
 		}
 		if (requested === chosen) apply(skins[chosen], rendered[chosen]);
 	}

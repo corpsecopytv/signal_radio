@@ -20,12 +20,16 @@ Working resource name: `signal_radio`. The handsets use product photos of the Mo
 - `toggleVoice` has a 4-unit check, but version 7.0.1 never fills the table it reads. The radio effect plays at any distance.
 
 ## Night Shifts MDT integration
-- Night Shifts gives server and client exports for shift data (start, end, status), departments, ranks, postal lookup, call forwarding (`ForwardCallToMDT`) and shift checks per department. Other export names and parameters: `TODO: confirm in Night Shifts docs`.
-- Night Shifts documents no events. To get MDT actions into the radio, add one hook in its unlocked function file (for example `c_functions.lua`) that triggers a `signal_radio` event.
-- Night Shifts is partly escrowed. Only the config and function files are editable.
+- The radio uses only the exports in `docs/EXPOSED_EXPORTS.md`, the guide that ships with Night Shifts. The guide treats every other export as unsupported.
+- The resource folder must be named `night_shifts_mdt`. Calls use the colon form: `exports['night_shifts_mdt']:ExportName(...)`.
+- `GetUserShiftData(source)` gives the shift state, department and callsign, plus postal, street and zone.
+- The guide documents no event for a shift, status or panic change. The radio reads every player's shift each 5 seconds. No Night Shifts file changes, so an update cannot overwrite a hook.
+- `config/night_shifts.lua` maps each Night Shifts department ID to a codeplug. The `radio_ns_dump` console command prints the IDs and one player's shift.
+- A player on a department with no mapping gets the civilian radio.
+- Senior ranks are not decided. A shift does not give the command channel yet. TODO: confirm in Night Shifts docs: the rank field in `GetUserShiftData`.
+- The radio keeps working when Night Shifts is stopped or a read fails. It keeps each player's current radio until a read succeeds.
 - Night Shifts already has a Leaflet live map with units, calls and panic markers.
 - Night Shifts needs oxmysql. The radio itself still uses no database.
-- Risk: a Night Shifts update can overwrite the hook. Keep the hook in `patches/night_shifts_hook.md` beside the pma-voice patch, with the steps to reapply it.
 
 ## Architecture
 The server is the authority. A registry maps each talkgroup to a pma-voice integer channel (range starting at 1001, to avoid clashing with other scripts). A tuned frequency uses its value in kHz as the channel, for example 476425. The client and UI only request changes.
@@ -34,8 +38,8 @@ The server is the authority. A registry maps each talkgroup to a pma-voice integ
 resources/[voice]/pma-voice            patched from patches/signal_radio.patch in the repo
 resources/[radio]/signal_radio/
   fxmanifest.lua
-  config/    talkgroups.lua, codeplugs.lua, towers.lua
-  server/    bridge, registry, permissions, radio, transmit, towers, voice_proof
+  config/    talkgroups.lua, codeplugs.lua, towers.lua, night_shifts.lua
+  server/    bridge, registry, permissions, radio, transmit, towers, bleed, voice_proof
   client/    radio, ptt, audio, signal, towers, voice_proof
   web/       handset/ with skins/   (plain JS, no build step)
 ```
@@ -45,17 +49,19 @@ Later steps add `web/dispatch/`, staff tools and optional GPS. `voice_proof` hol
 No database. Config lives in Lua files. Callsigns, scan choices, the tower list and tower sabotage timers live in server KVP. Handset position and volume live in client KVP.
 
 ### Permissions
-- The codeplug comes from the Night Shifts department and rank, through `server/bridge.lua`. Until Night Shifts is connected, `/radio_dev` sets a dev profile on the dev server, and every other player gets a civilian radio.
+- The codeplug comes from the Night Shifts department, through `server/bridge.lua`. On a dev server, a `/radio_dev` profile takes priority over a shift.
 - A codeplug defines the skin, zones and starting scan list. Later steps add panic behaviour and optional GPS visibility.
 - ACE is used only for `radio.admin`, `radio.priority` and `radio.dispatch`.
-- Callsign uses `/callsign` and is saved in server KVP.
-- Duty comes from the Night Shifts shift state. Ending a shift in the MDT removes the player from restricted talkgroups.
+- On shift, the callsign comes from the MDT and `/callsign` is blocked. Off shift, `/callsign` sets the callsign and saves it in server KVP. A shift with no MDT callsign also uses the saved one.
+- Duty comes from the Night Shifts shift state. Starting a shift, changing department or ending a shift turns the radio off and rebuilds it within 5 seconds. Ending a shift removes the player from restricted talkgroups.
 - `canUseRadio(source)` in `server/bridge.lua` returns true for every player. A player with no active shift gets the civilian radio (see Civilian use).
 - `canSabotage(source)` in `server/bridge.lua` returns true. Sabotage needs no item, and any player can start it at a tower.
 
 ### pma-voice patch (2 additions, kept minimal)
 1. **Listen-only channels.** New server exports `addRadioListener(source, channel, withAudio)` and `removeRadioListener(source, channel)`. When `withAudio` is true, the listener gets talk events and the talker adds the listener through `addVoiceTargets`. When `withAudio` is false, the listener gets talk events only, and the talker does not add the listener as a voice target. `signal_radio` sets `withAudio` to false for keyless listeners on encrypted talkgroups.
 2. **Per-talker resolver.** A client export registers a function that `toggleVoice` calls for radio audio. It returns `{ submix, volume }`, `{ proximity = true }` for normal voice, or nil to mute that talker. The `refreshRadioAudio` export reapplies audio for every talker.
+
+The patch also corrects four pma-voice behaviours that the radio depends on: releasing the radio key when the channel drops to 0, keeping phone call audio when a radio talker stops, respecting disable bits during an audio refresh, and clearing voice targets when members leave during a transmission.
 
 Everything else uses public exports. Patches between talkgroups need no pma change, because members move to one shared channel.
 
@@ -78,9 +84,9 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 
 ## Repository
 - The project lives in the private GitHub repo `corpsecopytv/signal_radio`.
-- The repo holds `signal_radio/`, `patches/signal_radio.patch`, this plan as `docs/plan.md`, and the test scripts in `docs/`. Step 4 adds `patches/night_shifts_hook.md`.
+- The repo holds `signal_radio/`, `patches/signal_radio.patch`, this plan as `docs/plan.md`, and the test scripts in `docs/`.
 - pma-voice is not committed. The patch file records the pinned pma-voice version.
-- Night Shifts files are never committed, because the resource is paid and partly escrowed. `patches/night_shifts_hook.md` holds only our own hook lines and the steps to reapply them.
+- Night Shifts files are never committed, because the resource is paid and partly escrowed. This includes its export guide.
 - `server.cfg`, keys and tokens are never committed. A `.gitignore` covers them.
 - Work happens on branches and merges to `main`. Changes reach the dev server before the live server. TODO: create `main`. The repo currently has only `feat/voice-proof`.
 
@@ -114,9 +120,11 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 - **Sabotage:** Sabotage needs no item. Any player can walk up to a tower and press E at its marker. The player then stays in an animation for 120 seconds before the sabotage takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the sabotage, and no cooldown starts. Only one player can sabotage a tower at a time. Once the sabotage takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be sabotaged again for 30 minutes, counted from when the sabotage took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a sabotage. Every sabotage is logged (who, which tower, when) and sends an alert to online staff.
 - **Fireground channel:** One short-range simplex talkgroup in the RFSQ zone, with a 500 metre range set in `config/talkgroups.lua`. It works without a tower and ignores signal tiers. It has the same 500 metre range as direct radio, but keeps full quality across that range. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance, using the server's distance beyond the game's streaming range.
 - **Emergency:** Panic with cooldown, tone on the talkgroup and priority for the sender. Man-down alert after a configurable delay.
-  - Radio panic also triggers the Night Shifts panic for that player, so the marker shows on the MDT map. TODO: confirm that the panic command can run for a given player from another resource.
-  - Night Shifts panic fires the `signal_radio` hook event, so the radio plays the panic tone and gives the sender priority.
-  - Man-down sends a call to the MDT through `ForwardCallToMDT`.
+  - Radio panic sets that player's MDT status through `UpdateShiftStatusByBindingByServerId(source, 'panic', callback)`. TODO: confirm in Night Shifts docs: whether this status puts a marker on the MDT map.
+  - The 5 second shift check watches for a change to panic status. The radio then plays the panic tone on the player's channel and gives the sender priority. The panic cooldown stops a radio panic from playing twice. TODO: confirm in Night Shifts docs: the `statusCode` field and the code that means panic.
+  - A radio that is off, or on no channel, plays nothing for an MDT panic.
+  - Man-down applies to an emergency radio that is on. After 30 seconds dead, the radio sends one call through `ForwardCallToMDT`, with call type `Panic`, sent to police and ambulance. The server refuses the alert if the player is alive, and allows one call each 60 seconds. Both times are set in `config/night_shifts.lua`.
+  - A man-down call goes to the MDT only. It plays no tone on the radio.
 - **GPS (optional):** Build this only if the Night Shifts map does not meet the need. Server-side OneSync positions, batched every 2 seconds, sent only to codeplugs with GPS visibility.
 - **Handset UI:** Zone and talkgroup selection, talker display, signal bars, member list, scan list, panic and draggable position. Each skin is a photo with a live screen and clickable zones over the real controls. Signal bars show the current tier. The radio's up and down keys move a highlight through any list. Select or Enter chooses the highlighted row. A status strip stays on screen when the radio is put away.
 - **Skins:** QPS and QAS use the APX 2000. QFD and RFSQ use the APX 8000XE in hi-vis. Civilians use the UV-5R. Each codeplug sets its skin in `config/codeplugs.lua`.
@@ -131,6 +139,7 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - When a talker on the talkgroup keys up, the keyless client plays a looping "encrypted" noise, generated in the handset. The loop stops when the talker stops.
   - The keyless handset shows "ENC" and does not show the talker's callsign or name.
   - Keyless players cannot transmit on an encrypted talkgroup.
+  - A keyless radio plays noise wherever it has tower signal, whatever the talker's range.
   - Signal tiers still apply. Tier none stops the noise loop too, because a keyless radio gets no talker position to use direct radio.
   - Do not use a distortion submix for this. A submix still sends the real voice to the client, and a modified client can remove the submix.
   - Use case: a civilian who tunes to an emergency frequency hears only noise.
@@ -166,7 +175,7 @@ Status at 2026-11-10.
 | 1. Voice proof | Done. All seven in-game tests passed. |
 | 2. Core radio | Working in-game. Dev profiles stand in for Night Shifts. |
 | 3. Handset UI | Working in-game. |
-| 4. Night Shifts integration and emergency | Radio-side panic is built. The rest needs the Night Shifts export names. |
+| 4. Night Shifts integration and emergency | Built and logic-tested. Waiting on the in-game test in `docs/test_night_shifts.md`. Senior ranks are not decided. |
 | 5. Scan, civilian radios and encryption | Working in-game. Spectator mode is still open. |
 | 6. Dispatch console | Not started. |
 | 7. Towers | Working in-game. Built ahead of steps 4 and 6. |
@@ -186,8 +195,10 @@ Battery, text messaging, browser dispatch and other CAD or MDT systems.
 - **Speaker bleed position:** Bleed cannot play from the radio's real position. It may sound flat, or wrong when the talker is also close by.
 - **Speaker bleed load:** The server checks positions around every receiving radio during traffic. Measure this in the load test.
 - **Speaker bleed and encryption:** Bleed includes encrypted talkgroups, so a civilian within 10 metres of an emergency radio can hear that traffic. This is intended.
-- **Night Shifts updates:** An update can overwrite the hook in its function file. Reapply it from `patches/night_shifts_hook.md`.
-- **Night Shifts exports:** Export names and parameters are not confirmed yet. Confirm them in the docs before step 4 of the build order.
+- **Night Shifts updates:** An update can change an export. Compare `docs/EXPOSED_EXPORTS.md` after each update, and rerun `docs/test_night_shifts.md`.
+- **Night Shifts fields:** The shipped guide does not list the rank or status field in `GetUserShiftData`. MDT-to-radio panic depends on the status field. The first in-game test confirms it.
+- **Shift check delay:** A shift change or MDT panic reaches the radio up to 5 seconds later.
+- **Man-down and death scripts:** The alert needs the game's dead state. A script that respawns players before the delay stops the alert. A script that keeps downed players alive also stops it.
 - **pma-voice version:** Pin the pma-voice version that the patch targets. Name who reapplies the patch after an update.
 - **Sabotage balance:** At about 20 players a night, a sabotage can stop long-range emergency comms in a zone. Direct radio still works up close. Tune the sabotage time and tower overlap in play tests.
 
@@ -207,8 +218,10 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - Check client frame time and server tick with the radio idle and during heavy traffic.
 - A player with no active Night Shifts shift cannot join a restricted talkgroup. Ending a shift removes the player from those talkgroups.
 - The department and rank from Night Shifts give the correct codeplug.
-- Radio panic shows a marker on the Night Shifts map. MDT panic plays the panic tone on the radio.
-- Man-down creates a call in the MDT.
+- Radio panic sets the player's MDT status to panic. Check whether it also shows a marker on the Night Shifts map. MDT panic plays the panic tone on the radio.
+- Man-down creates a `Panic` call for police and ambulance in the MDT. A radio that is off, or a civilian radio, sends no call.
+- On shift, the radio shows the MDT callsign and `/callsign` is blocked.
+- The radio keeps working when Night Shifts stops.
 - Sabotaging one tower leaves some coverage from an overlapping tower. Staff get a sabotage alert.
 - On the fireground channel, players within range hear each other with no tower, and players out of range do not.
 - Staff commands clear a stuck talker and remove a player from a channel.
@@ -236,6 +249,8 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - A player within 10 metres of a receiving radio hears muffled speaker audio. It fades with distance and stops past 10 metres.
 - A civilian within 10 metres of an emergency radio hears encrypted traffic through speaker bleed, but still hears only noise on their own radio.
 - A radio that is off, transmitting, or out of range of the talker does not bleed.
+- A player in a different routing bucket does not hear bleed.
+- Holding the radio key while the radio turns off or changes channel releases the transmission.
 - A player already on the talkgroup does not hear bleed as well.
 - Bleed listeners are removed when the traffic ends, when the player walks away, and when the resource restarts.
 

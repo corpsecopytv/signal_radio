@@ -41,13 +41,24 @@ function SendActiveTalkers(target, talkgroupId)
 	end
 end
 
---- Direct-only radios cannot be reached across the network, so they do not hold the channel.
-local function isChannelBusyFor(session, talkers)
-	if session.signal == 'none' then return false end
+--- A talker this radio cannot reach does not make the channel busy.
+local function isChannelBusyFor(session, talkers, talkgroupId)
+	local talkgroup = TalkgroupsById[talkgroupId]
 	for talker in pairs(talkers) do
-		if Sessions[talker].signal ~= 'none' then return true end
+		local distance = RadioDistance(talker, session.source)
+		if CanRadioReceive(Sessions[talker], session, talkgroup, distance) then return true end
 	end
 	return false
+end
+
+--- Tells a player who stopped hearing a talkgroup that its talkers have gone quiet for them.
+function SendTalkersStopped(target, talkgroupId)
+	for source in pairs(Talkers[talkgroupId] or {}) do
+		local session = Sessions[source]
+		if source ~= target then
+			TriggerClientEvent('signal_radio:talk', target, talkgroupId, source, session.callsign, false, session.signal)
+		end
+	end
 end
 
 RegisterNetEvent('pma-voice:setTalkingOnRadio')
@@ -60,7 +71,7 @@ AddEventHandler('pma-voice:setTalkingOnRadio', function(talking)
 
 	if talking == true then
 		if talkers and talkers[source] then return end
-		if talkers and isChannelBusyFor(session, talkers) and not HasPriority(session) then
+		if talkers and isChannelBusyFor(session, talkers, talkgroupId) and not HasPriority(session) then
 			return TriggerClientEvent('signal_radio:txDenied', source)
 		end
 		Talkers[talkgroupId] = talkers or {}

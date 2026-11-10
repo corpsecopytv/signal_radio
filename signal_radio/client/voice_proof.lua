@@ -128,7 +128,7 @@ RegisterCommand('vp_goto', function(_, args)
 	local ped = PlayerPedId()
 	SetEntityCoordsNoOffset(ped, x + 0.0, y + 0.0, z + 0.0, false, false, false)
 	FreezeEntityPosition(ped, true)
-	say(('Moved to %d, %d and frozen. /vp_spot off releases you.'):format(x, y))
+	say(('Moved to %g, %g and frozen. /vp_spot off releases you.'):format(x, y))
 end, false)
 
 -- /vp_tower <id>: stands you on the ground beside a tower, for sabotage tests.

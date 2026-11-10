@@ -9,6 +9,7 @@ Radio = {
 	talkerSignal = {},
 	talkerDistance = {},
 	bleed = {},
+	transmitting = false,
 	priorityUntil = 0,
 	pressingUiPtt = false,
 }
@@ -71,6 +72,7 @@ RegisterKeyMapping('radio', 'Open radio handset', 'keyboard', 'F6')
 RegisterNetEvent('signal_radio:state', function(state)
 	if state.talkgroup ~= Radio.state.talkgroup or not state.power then
 		Radio.busy = {}
+		if Radio.transmitting then ReleaseTransmit() end
 	end
 	Radio.state = state
 	SendToHandset('state', { state = state, self = GetPlayerServerId(PlayerId()) })
@@ -91,7 +93,9 @@ RegisterNetEvent('signal_radio:talk', function(talkgroup, talker, callsign, talk
 end)
 
 RegisterNetEvent('signal_radio:talkerDistance', function(talker, distance)
+	local firstValue = Radio.talkerDistance[talker] == nil
 	Radio.talkerDistance[talker] = distance
+	if firstValue then pma:refreshRadioAudio() end
 end)
 
 RegisterNetEvent('signal_radio:bleed', function(channel, volume)
@@ -110,8 +114,8 @@ RegisterNetEvent('pma-voice:radioListenerActivity', function(_, active)
 	SendToHandset('encrypted', { active = active })
 end)
 
-RegisterNetEvent('signal_radio:panicRefused', function()
-	SendToHandset('panicRefused')
+RegisterNetEvent('signal_radio:panicRefused', function(reason)
+	SendToHandset('panicRefused', { reason = reason })
 end)
 
 local actions = {
@@ -158,7 +162,7 @@ local actions = {
 		if not volume then return end
 		volume = math.max(0, math.min(100, math.floor(volume)))
 		pma:setRadioVolume(volume)
-		SetResourceKvpInt('radioVolume', volume)
+		SetResourceKvp('radioVolumeLevel', tostring(volume))
 		SendToHandset('prefs', { volume = volume })
 	end,
 	savePosition = function(data)
@@ -175,9 +179,29 @@ RegisterNUICallback('action', function(data, cb)
 end)
 
 CreateThread(function()
-	local savedVolume = GetResourceKvpInt('radioVolume')
-	if savedVolume > 0 then
+	local savedVolume = tonumber(GetResourceKvpString('radioVolumeLevel'))
+	if savedVolume then
 		pma:setRadioVolume(savedVolume)
+	end
+end)
+
+-- Sends one man-down alert each time the player stays dead past the delay.
+CreateThread(function()
+	local deadSince = nil
+	local alerted = false
+	while true do
+		Wait(1000)
+		if IsEntityDead(PlayerPedId()) then
+			deadSince = deadSince or GetGameTimer()
+			local waited = GetGameTimer() - deadSince >= Config.NightShifts.manDown.delayMs
+			if waited and not alerted and Radio.state.power and not Radio.state.civilian then
+				alerted = true
+				TriggerServerEvent('signal_radio:manDown')
+			end
+		else
+			deadSince = nil
+			alerted = false
+		end
 	end
 end)
 

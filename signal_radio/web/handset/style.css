@@ -439,6 +439,11 @@ button.lcd-row.is-cursor:hover { background: var(--lcd-ink); }
 	border-width: 1px;
 }
 
+.skinned button.lcd-row.is-cursor:hover {
+	background: var(--lcd-ink);
+	outline: none;
+}
+
 /* A square indicator lights only while transmitting, and shows the photo when off. */
 .skinned .led[data-shape="square"] {
 	border: 0;

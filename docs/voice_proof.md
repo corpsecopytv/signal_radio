@@ -12,7 +12,7 @@ You need a headset with a microphone. A headset stops the second client feeding 
 ## Install
 1. Install pma-voice 7.0.1, commit `6c9d96e`.
 2. Open a terminal inside the `pma-voice` folder.
-3. Run `git apply --ignore-whitespace path/to/signal_radio.patch`.
+3. Run `git apply --ignore-whitespace path/to/signal_radio.patch`. If `pma-voice` sits inside another git repository, this can skip every file and print nothing. In that case, run it from that repository's root and add `--directory=path/to/pma-voice`.
 4. Copy the `signal_radio` resource folder to `resources/[radio]/signal_radio`.
 5. Add these lines to the dev `server.cfg`:
 

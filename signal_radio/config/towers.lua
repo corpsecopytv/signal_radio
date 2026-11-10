@@ -33,6 +33,8 @@ Config.Bleed = {
 	maxVolume = 0.7,
 	minVolume = 0.05,
 	updateMs = 500,
+	-- Within this range the talker's own voice carries, so bleed does not replace it.
+	naturalVoiceRange = 20.0,
 }
 
 Config.Sabotage = {

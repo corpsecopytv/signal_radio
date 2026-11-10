@@ -22,7 +22,7 @@ These work with the commands from `docs/test_core_radio.md`, plus:
 | --- | --- |
 | `/radio_tower list` | Shows each tower's id, sabotage time and cooldown. |
 | `/radio_tower_debug` | Shows or hides each tower's radius on the map. |
-| `/vp_goto <x> <y>` | Moves you there and freezes you. |
+| `/vp_goto <x> <y> [z]` | Moves you there and freezes you. |
 | `/vp_tower <id>` | Stands you on the ground beside a tower. |
 | `/vp_spot off` | Releases you from a freeze. |
 | `/vp_bleedtest <here, off>` | Places or removes a stand-in receiving radio, for speaker bleed tests. |
@@ -49,7 +49,7 @@ A runs `/radio_dev qps`, then `/radio_tower list` and `/radio_tower_debug`. Open
 A turns the radio on, and moves through the four positions in the table.
 
 - [ ] Each position shows the expected bars within a few seconds.
-- [ ] Optional: at the Bad position, sitting in a vehicle improves the signal.
+- [ ] Optional, if you have a vehicle spawner: run `/vp_spot off`, sit in a vehicle near the Bad position, and check the signal improves.
 
 ## 3. Signal audio
 B runs `/radio_dev qps`, then `/vp_tower legion`, and turns on. A and B stay on QPS OPS 1. B has full signal.
@@ -94,9 +94,13 @@ Press E again, then walk 3 metres away.
 
 - [ ] The sabotage stops.
 
-Press E on A's client too, by running `/vp_tower paleto` on A, while B is sabotaging the tower.
+B runs `/vp_tower paleto` and presses E. While B is sabotaging the tower, A runs `/vp_tower paleto` and presses E.
 
 - [ ] The second player gets "Someone is already sabotaging this tower".
+
+B presses X to cancel. Press E twice quickly at the marker.
+
+- [ ] The sabotage starts once and the countdown keeps running. Press X to cancel it.
 
 ## 5. Sabotaging a tower
 A runs `/radio_dev qps`, turns on, and runs `/vp_goto -150 7700`. A has 4 bars.
@@ -174,7 +178,7 @@ A and B both run `/radio_dev qps`, turn on, and stay on QPS OPS 1. For each row,
 - [ ] "Clearest" is noticeably cleaner than "Normal".
 - [ ] In the no-tower rows, both radios show 0 bars and "Direct".
 
-Move B between 7750 and legion while A transmits with `/vp_tx 20 5`.
+A runs `/vp_goto -150 7700`. Move B between 7750 and legion while A transmits with `/vp_tx 20 5`.
 
 - [ ] The audio changes within a few seconds, without needing a new transmission.
 
@@ -225,6 +229,10 @@ B runs `/radio_dev off`, turns on, and tunes to 450.025. A transmits.
 
 - [ ] B hears only noise and sees "ENC". A radio on that encrypted frequency does not also get bleed.
 
+B turns the radio off, and stays at 5 metres. A transmits.
+
+- [ ] B hears bleed again.
+
 B runs `/vp_bleedtest off`. A transmits.
 
 - [ ] B no longer hears bleed.
@@ -238,7 +246,7 @@ A runs `/vp_spot off`, then walks to a spot and runs `/radio_tower add testsite 
 - [ ] `/radio_tower_debug` shows its circle.
 - [ ] `/radio_tower radius testsite 400` shrinks the circle.
 
-Restart `signal_radio`.
+Restart `signal_radio`, then run `/radio_tower_debug` again.
 
 - [ ] testsite is still there, and the circle is still 400.
 
@@ -262,4 +270,4 @@ Run `/radio_tower remove testsite`.
 ## After testing
 Stand at each real site you want and run `/radio_tower add <id> <radius>`. Use `/radio_tower remove <id>` for the placeholders. The saved list replaces `config/towers.lua` once you change it.
 
-Adjust the `sr_near`, `sr_worn`, `sr_bad` and `sr_bleed` values in `client/audio.lua` if the audio needs tuning.
+Adjust the `sr_near`, `sr_full`, `sr_worn`, `sr_bad` and `sr_bleed` values in `client/audio.lua` if the audio needs tuning.

@@ -122,6 +122,8 @@ RegisterNetEvent('signal_radio:sabotageStart', function(towerId)
 	if sabotages[towerId].cooldownUntil > os.time() then
 		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'cooldown')
 	end
+	-- A repeat press from the player already sabotaging this tower needs no reply.
+	if attempts[towerId] and attempts[towerId].source == source then return end
 	if attempts[towerId] or attemptOf(source) then
 		return TriggerClientEvent('signal_radio:sabotageRefused', source, 'in_use')
 	end
@@ -150,7 +152,7 @@ RegisterNetEvent('signal_radio:sabotageFinish', function(towerId)
 	sabotages[towerId].sabotagedUntil = now + Config.Sabotage.offlineSeconds
 	sabotages[towerId].cooldownUntil = now + Config.Sabotage.cooldownSeconds
 	saveSabotage(towerId)
-	alertStaff(('%s (id %d) sabotaged tower %s (%s).'):format(GetPlayerName(source), source, tower.label, tower.id))
+	alertStaff(('%s: %s (id %d) sabotaged tower %s (%s).'):format(os.date('%Y-%m-%d %H:%M:%S'), GetPlayerName(source), source, tower.label, tower.id))
 	broadcastTowers()
 	announceTower(tower, false)
 end)
@@ -186,21 +188,24 @@ function commands.add(source, args)
 	if not id or findTower(id) or not id:match('^[%w_]+$') then
 		return 'Give a new tower id using letters, numbers or underscores.'
 	end
+	if radius <= 0 then return 'Give a radius above 0.' end
 	local coords = GetEntityCoords(GetPlayerPed(source))
 	towers[#towers + 1] = { id = id, label = id, x = coords.x, y = coords.y, z = coords.z, radius = radius + 0.0 }
 	loadSabotage(id)
 	saveTowers()
 	broadcastTowers()
-	return ('Added tower %s with radius %d.'):format(id, radius)
+	return ('Added tower %s with radius %g.'):format(id, radius)
 end
 
 function commands.remove(_, args)
 	local _, index = findTower(args[2])
 	if not index then return 'That tower does not exist.' end
 	local id = args[2]
+	cancelAttempt(id, 'interrupted')
 	table.remove(towers, index)
 	sabotages[id] = nil
-	attempts[id] = nil
+	-- A tower added later with this id must start fresh.
+	SetResourceKvp(sabotageKey(id), '0,0')
 	saveTowers()
 	broadcastTowers()
 	return ('Removed tower %s.'):format(id)
@@ -213,7 +218,7 @@ function commands.radius(_, args)
 	tower.radius = radius + 0.0
 	saveTowers()
 	broadcastTowers()
-	return ('Tower %s radius is now %d.'):format(tower.id, radius)
+	return ('Tower %s radius is now %g.'):format(tower.id, radius)
 end
 
 function commands.clear(_, args)
