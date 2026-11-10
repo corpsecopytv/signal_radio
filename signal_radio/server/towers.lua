@@ -180,27 +180,46 @@ AddEventHandler('playerDropped', function()
 	if towerId then cancelAttempt(towerId) end
 end)
 
-local commands = {}
-
--- /radio_tower add <id> [radius]: places a tower where you stand.
-function commands.add(source, args)
-	local id, radius = args[2], tonumber(args[3]) or 2500.0
-	if not id or findTower(id) or not id:match('^[%w_]+$') then
-		return 'Give a new tower id using letters, numbers or underscores.'
+--- Tower details for the admin panel.
+function GetAdminTowers()
+	local list = {}
+	local now = os.time()
+	for _, tower in ipairs(towers) do
+		local sabotage = sabotages[tower.id]
+		list[#list + 1] = {
+			id = tower.id,
+			label = tower.label,
+			radius = tower.radius,
+			online = not isSabotaged(tower.id),
+			sabotagedSeconds = math.max(0, sabotage.sabotagedUntil - now),
+			cooldownSeconds = math.max(0, sabotage.cooldownUntil - now),
+		}
 	end
-	if radius <= 0 then return 'Give a radius above 0.' end
+	return list
+end
+
+-- Admin panel actions. Each returns success and a message for the panel.
+AdminTowerActions = {}
+
+--- Places a tower where the admin stands.
+function AdminTowerActions.towerAdd(source, data)
+	local id, radius = data.id, tonumber(data.radius) or 2500.0
+	if type(id) ~= 'string' or #id > 32 or findTower(id) or not id:match('^[%w_]+$') then
+		return false, 'Give a new tower ID using letters, numbers or underscores.'
+	end
+	if radius <= 0 then return false, 'Give a radius above 0.' end
 	local coords = GetEntityCoords(GetPlayerPed(source))
 	towers[#towers + 1] = { id = id, label = id, x = coords.x, y = coords.y, z = coords.z, radius = radius + 0.0 }
 	loadSabotage(id)
 	saveTowers()
 	broadcastTowers()
-	return ('Added tower %s with radius %g.'):format(id, radius)
+	return true, ('Added tower %s with radius %g.'):format(id, radius)
 end
 
-function commands.remove(_, args)
-	local _, index = findTower(args[2])
-	if not index then return 'That tower does not exist.' end
-	local id = args[2]
+function AdminTowerActions.towerRemove(_, data)
+	local _, index = findTower(data.id)
+	if not index then return false, 'That tower does not exist.' end
+	local id = data.id
 	cancelAttempt(id, 'interrupted')
 	table.remove(towers, index)
 	sabotages[id] = nil
@@ -208,53 +227,28 @@ function commands.remove(_, args)
 	SetResourceKvp(sabotageKey(id), '0,0')
 	saveTowers()
 	broadcastTowers()
-	return ('Removed tower %s.'):format(id)
+	return true, ('Removed tower %s.'):format(id)
 end
 
-function commands.radius(_, args)
-	local tower = findTower(args[2])
-	local radius = tonumber(args[3])
-	if not tower or not radius or radius <= 0 then return 'Use /radio_tower radius <id> <metres>.' end
+function AdminTowerActions.towerRadius(_, data)
+	local tower = findTower(data.id)
+	local radius = tonumber(data.radius)
+	if not tower or not radius or radius <= 0 then return false, 'Give a radius above 0.' end
 	tower.radius = radius + 0.0
 	saveTowers()
 	broadcastTowers()
-	return ('Tower %s radius is now %g.'):format(tower.id, radius)
+	return true, ('Tower %s radius is now %g.'):format(tower.id, radius)
 end
 
-function commands.clear(_, args)
-	local tower = findTower(args[2])
-	if not tower then return 'That tower does not exist.' end
+function AdminTowerActions.towerClear(_, data)
+	local tower = findTower(data.id)
+	if not tower then return false, 'That tower does not exist.' end
 	sabotages[tower.id] = { sabotagedUntil = 0, cooldownUntil = 0 }
 	saveSabotage(tower.id)
 	broadcastTowers()
 	announceTower(tower, true)
-	return ('Cleared the sabotage and cooldown on %s.'):format(tower.id)
+	return true, ('Cleared the sabotage and cooldown on %s.'):format(tower.id)
 end
-
-function commands.list()
-	local parts = {}
-	local now = os.time()
-	for _, tower in ipairs(towers) do
-		local sabotage = sabotages[tower.id]
-		local status = sabotage.sabotagedUntil > now and ('sabotaged %ds'):format(sabotage.sabotagedUntil - now) or 'online'
-		if sabotage.cooldownUntil > now then
-			status = ('%s, cooldown %ds'):format(status, sabotage.cooldownUntil - now)
-		end
-		parts[#parts + 1] = ('%s (%s)'):format(tower.id, status)
-	end
-	return table.concat(parts, ', ')
-end
-
-RegisterCommand('radio_tower', function(source, args)
-	if source ~= 0 and not IsPlayerAceAllowed(source, 'radio.admin') then return end
-	local command = commands[args[1]]
-	local message = command and command(source, args) or 'Use add, remove, radius, clear or list.'
-	if source == 0 then
-		print(('[signal_radio] %s'):format(message))
-	else
-		TriggerClientEvent('chat:addMessage', source, { args = { 'Radio', message } })
-	end
-end, false)
 
 do
 	local saved = GetResourceKvpString(TOWER_LIST_KEY)

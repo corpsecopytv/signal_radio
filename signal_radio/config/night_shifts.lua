@@ -1,7 +1,7 @@
 Config = Config or {}
 
 -- Connects the radio to Night Shifts MDT.
--- Run radio_ns_dump in the server console to see your department IDs.
+-- The Night Shifts tab in /radioadmin shows your department IDs.
 Config.NightShifts = {
 	-- How often the radio checks each player's shift.
 	checkMs = 5000,

@@ -1,6 +1,6 @@
 Config = Config or {}
 
--- Placeholder sites with overlapping coverage. Replace them in-game with /radio_tower.
+-- Placeholder sites with overlapping coverage. Replace them in-game on the Towers tab of /radioadmin.
 -- Once an admin changes the list, the saved list replaces this one.
 Config.Towers = {
 	{ id = 'legion', label = 'Legion Square', x = 195.0, y = -934.0, z = 30.0, radius = 2500.0 },

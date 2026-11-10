@@ -25,27 +25,39 @@ setr voice_enableRadios 1
 setr voice_onClickVolume 0
 setr voice_offClickVolume 0
 setr voice_disableAutomaticListenerOnCamera 1
-setr signal_radio_dev_profiles 1
-setr signal_radio_voice_proof 1
+setr signal_radio_dev_tools 1
 add_ace builtin.everyone radio.admin allow
 ensure pma-voice
 ensure signal_radio
 ```
 
 4. Restart the server. A resource refresh is not enough, because the resource has new files.
-5. Start both clients, as in `docs/voice_proof.md`. Run them in windowed mode, side by side.
-6. A runs `/vp_spot a`. B runs `/vp_spot b`. The spots are 150 metres apart.
+5. Start both clients, as in "Start two clients" below. Run them in windowed mode, side by side.
+6. A goes to Spot A. B goes to Spot B. The spots are 150 metres apart.
 
 Pass: the server console shows no `signal_radio` or `pma-voice` errors.
 
+## Start two clients
+1. Right-click `FiveM.exe` at `%LOCALAPPDATA%\FiveM\FiveM.exe`, and create two shortcuts.
+2. Open the second shortcut's Properties. Add ` -cl2` after the closing quote in Target.
+3. Start the first shortcut and connect to the dev server. Wait until it is fully loaded.
+4. Start the second shortcut and connect to the same server.
+
+This is the method in the FiveM docs. It keeps the same identifier on both clients.
+
+If the second client gets "account is already being used", stop here. You then need a second GTA V licence, on this PC or another one. Do not use other workarounds from forums, because one forum author reported a ban.
+
 ## How to run these tests
 - **Keyboard focus:** While the radio is open, it takes your keyboard. Press Esc or use "Put radio away" before typing a chat command.
+- **Open the admin panel:** Put the radio away and type `/radioadmin`. You can bind it to a key in FiveM settings. Esc closes the panel.
+- **Set profile:** On Test tools, press the department under My test profile. Tick Senior first for a senior profile. None gives the civilian radio.
+- **Go to:** On Test tools, type X and Y under Move me, and press Go and freeze. Release unfreezes you.
+- **Stand beside a tower:** On Towers, press Stand beside on that tower.
+- **Timed transmit:** On Test tools, under Timed transmit. `10 5` means 10 seconds, starting after 5 seconds. Close the panel and switch to the other client within the delay, then talk until "Radio key up" appears.
+- **Find a server ID:** The Radios tab lists every player's ID. It also shows each radio's channel number.
+- **Watch an ID:** On Test tools, type the ID under Watch a talker's voice and press Watch. Read the result in chat or at the foot of the panel. Stop ends it.
 - **Open the radio:** Press F6.
 - **Talk on the radio:** Hold your radio key, Left Alt by default, with the radio open or put away. With it open, you can also hold the side bar on the left.
-- **Timed transmit:** Put the radio away and run `/vp_tx 10 5`. Switch to the other client within 5 seconds, then talk until "Radio key up" appears.
-- **Find a server id:** Run `/vp_state <channel>`. It marks your own id. A talkgroup's channel is its number in `config/talkgroups.lua`. A frequency's channel is its value in kHz, so 462.125 is 462125.
-- **Check that voice arrives:** Run `/vp_watch <talker id>`, and read the result in chat or the F8 console.
-- **Do not use `/vp_fx`.** It replaces the radio's audio settings until the resource restarts.
 - **One account:** Both clients share your Rockstar account, so they share a callsign and saved scan choices. This is expected. The test does not need separate callsigns.
 
 Tick each line as it passes. If one fails, note the test number, what you saw, and any error in the F8 or server console.
@@ -55,16 +67,16 @@ A runs each command, then presses F6 to look at the radio.
 
 | Command | Expected radio |
 | --- | --- |
-| `/radio_dev qps` | APX 2000 |
-| `/radio_dev qas` | APX 2000 |
-| `/radio_dev qfd` | APX 8000XE hi-vis |
-| `/radio_dev rfsq` | APX 8000XE hi-vis |
-| `/radio_dev off` | UV-5R |
+| Profile QPS | APX 2000 |
+| Profile QAS | APX 2000 |
+| Profile QFD | APX 8000XE hi-vis |
+| Profile RFSQ | APX 8000XE hi-vis |
+| Profile None | UV-5R |
 
 - [ ] Each command shows the expected radio.
 - [ ] The radio has no white box around it over the game.
 
-A runs `/radio_dev qps senior`, and opens the radio.
+A sets profile QPS senior, and opens the radio.
 
 - [ ] Clicking the left knob turns the radio on, with a power tone.
 - [ ] The screen shows QPS and OPS 1.
@@ -82,9 +94,9 @@ A runs `/radio_dev qps senior`, and opens the radio.
 - [ ] The status strip shows the zone and channel while the radio is away.
 
 ## 2. Talking on a talkgroup
-A runs `/radio_dev qps senior`. B runs `/radio_dev qps`. Turn both radios on. Both stay on QPS OPS 1.
+A sets profile QPS senior. B sets profile QPS. Turn both radios on. Both stay on QPS OPS 1.
 
-B runs `/vp_state 1001`, notes A's id, then runs `/vp_watch <A id>`. A transmits.
+B reads A's ID on the Radios tab, then watches that ID. A transmits.
 
 - [ ] B shows `VOICE ARRIVING`, and you hear the radio effect.
 - [ ] A's screen turns rose and shows "Transmitting".
@@ -112,26 +124,26 @@ Return B to OPS 1.
 - [ ] The keyboard arrows and Enter also work.
 - [ ] The small dot marks your current zone.
 
-Run `/radio_dev rfsq` on A, and turn the radio on.
+Set profile RFSQ on A, and turn the radio on.
 
 - [ ] The RFSQ radio lists every zone, with RFSQ first.
 
-Run `/radio_dev qps` on A, then open QPS in the Zone list.
+Set profile QPS on A, then open QPS in the Zone list.
 
 - [ ] Command is missing for a non-senior radio.
 
-Run `/radio_dev qps senior` on A.
+Set profile QPS senior on A.
 
 - [ ] Command appears.
 
-Run `/radio_dev qfd` on B. Turn both radios on. A moves to the QFD zone on OPS. A transmits.
+Set profile QFD on B. Turn both radios on. A moves to the QFD zone on OPS. A transmits.
 
 - [ ] B hears A, showing that a QPS radio can reach another department.
 
 ## 5. Busy channel and panic
-A and B both run `/radio_dev qps`. Both go to QPS OPS 1.
+A and B both set profile QPS. Both go to QPS OPS 1.
 
-A runs `/vp_tx 15 5`. Switch to B. While A is transmitting, hold Left Alt on B and talk.
+A starts timed transmit `15 5`. Switch to B. While A is transmitting, hold Left Alt on B and talk.
 
 - [ ] B gets a busy tone and "Channel busy" shows when the radio is open.
 - [ ] A's client does not receive B's voice.
@@ -145,12 +157,12 @@ On A, hold the orange emergency button.
 - [ ] The alert clears after about 8 seconds.
 - [ ] A second hold within 30 seconds shows the wait message.
 
-Within 60 seconds of A's panic, B runs `/vp_tx 15 3`. While B is transmitting, A holds Left Alt and talks.
+Within 60 seconds of A's panic, B starts timed transmit `15 3`. While B is transmitting, A holds Left Alt and talks.
 
 - [ ] A is not blocked, because panic gives priority.
 
 ## 6. Scan list
-A and B both run `/radio_dev qps`. Turn both radios on. A stays on QPS OPS 1. B moves to OPS 2.
+A and B both set profile QPS. Turn both radios on. A stays on QPS OPS 1. B moves to OPS 2.
 
 On A, press Scan.
 
@@ -171,13 +183,13 @@ On A, tick QAS OPS. Move B to the QAS zone, on OPS. B transmits.
 
 - [ ] A hears B on another department's talkgroup.
 
-Reconnect A, and run `/radio_dev qps`. Open the Scan list.
+Reconnect A, and set profile QPS. Open the Scan list.
 
 - [ ] QAS OPS is still ticked, and OPS 2 is still unticked.
 - [ ] Scan shows off.
 
 ## 7. Civilian radio tuning
-A runs `/radio_dev off`. Turn the radio on using the top knob. It starts on 476.425.
+A sets profile None. Turn the radio on using the top knob. It starts on 476.425.
 
 - [ ] The screen shows UHF and 476.425, with no channel names.
 - [ ] Typing on the radio's number keys shows digits filling in, such as `462.___`.
@@ -194,9 +206,9 @@ A runs `/radio_dev off`. Turn the radio on using the top knob. It starts on 476.
 - [ ] There is no emergency button zone and no Scan option.
 
 ## 8. Civilians talking
-A and B both run `/radio_dev off`. Both turn on, and both tune to 462.125.
+A and B both set profile None. Both turn on, and both tune to 462.125.
 
-B runs `/vp_state 462125`, notes A's id, then runs `/vp_watch <A id>`. A transmits.
+B reads A's ID on the Radios tab, then watches that ID. A transmits.
 
 - [ ] B shows `VOICE ARRIVING`, and you hear A.
 - [ ] B's screen turns amber and shows "Receiving", with no name.
@@ -208,24 +220,24 @@ B tunes to 462.150. A transmits.
 - [ ] B stays silent.
 
 ## 9. Civilian on an emergency frequency
-A runs `/radio_dev qps`, turns on and stays on QPS OPS 1. B runs `/radio_dev off`, turns on and tunes to 450.025.
+A sets profile QPS, turns on and stays on QPS OPS 1. B sets profile None, turns on and tunes to 450.025.
 
 Keep the clients at spots a and b. Check that B is not spectating.
 
-A runs `/vp_state 1001` and notes A's id. B runs `/vp_watch <A id>`. A transmits.
+B reads A's ID on the Radios tab, then watches that ID. A transmits.
 
 - [ ] B hears only noise while A transmits, and the noise stops when A stops.
 - [ ] B's screen turns amber and shows "ENC", with no callsign.
-- [ ] `/vp_watch` on B stays on silent.
+- [ ] The watch on B stays on silent.
 - [ ] B's push-to-talk does nothing, and A receives nothing.
 - [ ] Tuning B away during a transmission stops the noise.
 
-Control: B runs `/radio_dev qps`, and turns on. A transmits.
+Control: B sets profile QPS, and turns on. A transmits.
 
 - [ ] B shows `VOICE ARRIVING`. This proves the watch works.
 
 ## 10. Emergency frequency mode
-A runs `/radio_dev qps`. B runs `/radio_dev off`. Turn both on. B tunes to 462.125.
+A sets profile QPS. B sets profile None. Turn both on. B tunes to 462.125.
 
 On A, press Zone, then select Frequency.
 
@@ -238,15 +250,15 @@ A tunes to 462.125.
 
 - [ ] A and B can hear each other in both directions.
 
-B runs `/radio_dev qfd`, turns on and stays on QFD OPS. A types 450.225. A transmits.
+B sets profile QFD, turns on and stays on QFD OPS. A types 450.225. A transmits.
 
 - [ ] B hears A with clear audio.
 
-Repeat the digit checks on the APX 8000XE. Run `/radio_dev qfd` on A, and enter frequency mode.
+Repeat the digit checks on the APX 8000XE. Set profile QFD on A, and enter frequency mode.
 
 - [ ] The `0` and `*` keys work on the fire radio too.
 
-Junior check: A runs `/radio_dev qps`, and enters frequency mode. B runs `/radio_dev qps senior`, turns on, and moves to QPS Command. A types 450.075. B transmits.
+Junior check: A sets profile QPS, and enters frequency mode. B sets profile QPS senior, turns on, and moves to QPS Command. A types 450.075. B transmits.
 
 - [ ] A hears only noise and sees "ENC".
 
@@ -259,14 +271,14 @@ Scan check: On A, turn scan on from the Scan list. Enter frequency mode, then re
 - [ ] The "Scan" tag is hidden in frequency mode, and scanning resumes in zone mode.
 
 ## 11. Cleanup
-A and B both run `/radio_dev qps`, and go to OPS 1.
+A and B both set profile QPS, and go to OPS 1.
 
-A runs `/vp_tx 20 5`. While A is transmitting, restart `signal_radio` from the server console.
+A starts timed transmit `20 5`. While A is transmitting, restart `signal_radio` from the server console.
 
 - [ ] The server console shows no errors.
 - [ ] The game keeps its mouse and keyboard on both clients.
 
-A presses Left Alt once to clear the key. Both clients run `/radio_dev qps` again, and turn on.
+A presses Left Alt once to clear the key. Both clients set profile QPS again, and turn on.
 
 - [ ] A and B can talk normally on OPS 1.
 - [ ] Neither client has a stuck radio effect on normal voice.
@@ -300,4 +312,4 @@ Close B's client while it is on a channel.
 | 11. Cleanup | | |
 
 ## When done
-Remove `setr signal_radio_dev_profiles 1`, `setr signal_radio_voice_proof 1` and the `add_ace` line from the dev `server.cfg` if other people use that server.
+Remove `setr signal_radio_dev_tools 1` and the `add_ace` line from the dev `server.cfg` if other people use that server.

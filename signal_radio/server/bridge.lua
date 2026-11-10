@@ -1,9 +1,9 @@
 -- Connects the radio to Night Shifts MDT.
--- A dev profile, set with /radio_dev on a dev server, takes priority over a shift.
+-- A test profile, set in the admin panel on a dev server, takes priority over a shift.
 
 local MDT = 'night_shifts_mdt'
 local settings = Config.NightShifts
-local devProfilesEnabled = GetConvarInt('signal_radio_dev_profiles', 0) == 1
+local devToolsEnabled = GetConvarInt('signal_radio_dev_tools', 0) == 1
 local devProfiles = {}
 local reportedDepartments = {}
 local wasPanic = {}
@@ -151,9 +151,9 @@ end
 CreateThread(function()
 	Wait(settings.checkMs)
 	if not isMdtStarted() then
-		print('[signal_radio] Night Shifts is not running, so players with no dev profile get a civilian radio.')
+		print('[signal_radio] Night Shifts is not running, so players with no test profile get a civilian radio.')
 	elseif next(settings.departments) == nil then
-		print('[signal_radio] No departments are set in config/night_shifts.lua. Run radio_ns_dump to see their IDs.')
+		print('[signal_radio] No departments are set in config/night_shifts.lua. The Night Shifts tab in /radioadmin shows their IDs.')
 	end
 	while true do
 		CheckNightShifts()
@@ -161,38 +161,50 @@ CreateThread(function()
 	end
 end)
 
--- radio_ns_dump [server id]
--- Prints the Night Shifts departments, and one player's shift, to the server console.
-RegisterCommand('radio_ns_dump', function(src, args)
-	if src ~= 0 and not IsPlayerAceAllowed(src, 'radio.admin') then return end
-	if not isMdtStarted() then
-		return print('[signal_radio] Night Shifts is not running.')
-	end
-	print('[signal_radio] Departments: ' .. json.encode(exports[MDT]:GetDepartments()))
+--- The Night Shifts details for the admin panel.
+function GetNightShiftsInfo(target)
+	local info = { running = isMdtStarted(), departments = {} }
+	if not info.running then return info end
 
-	local target = tonumber(args[1]) or src
-	if target ~= 0 then
-		print(('[signal_radio] Shift for player %d: %s'):format(target, json.encode(readShift(target))))
+	local ok, departments = pcall(function()
+		return exports[MDT]:GetDepartments()
+	end)
+	for _, department in ipairs(ok and type(departments) == 'table' and departments or {}) do
+		local id = tonumber(department.id)
+		info.departments[#info.departments + 1] = {
+			id = id,
+			name = department.departmentName,
+			codeplug = id and settings.departments[id] or nil,
+		}
 	end
-end, false)
+	table.sort(info.departments, function(a, b) return (a.id or 0) < (b.id or 0) end)
+	info.shift = readShift(target)
+	return info
+end
+
+function AreDevToolsEnabled()
+	return devToolsEnabled
+end
+
+function GetDevProfile(source)
+	return devProfiles[source]
+end
+
+--- Sets a test profile. The department 'off' removes it.
+--- @return boolean set
+function SetDevProfile(source, department, senior)
+	if department == 'off' then
+		devProfiles[source] = nil
+	elseif Config.Codeplugs[department] then
+		devProfiles[source] = { department = department, senior = senior == true }
+	else
+		return false
+	end
+	RefreshSession(source)
+	return true
+end
 
 AddEventHandler('playerDropped', function()
 	devProfiles[source] = nil
 	wasPanic[source] = nil
 end)
-
-if devProfilesEnabled then
-	-- /radio_dev <qps|qas|qfd|rfsq|off> [senior]
-	RegisterCommand('radio_dev', function(src, args)
-		if src == 0 or not IsPlayerAceAllowed(src, 'radio.admin') then return end
-		local department = args[1]
-		if department == 'off' then
-			devProfiles[src] = nil
-		elseif Config.Codeplugs[department] then
-			devProfiles[src] = { department = department, senior = args[2] == 'senior' }
-		else
-			return
-		end
-		RefreshSession(src)
-	end, false)
-end

@@ -9,25 +9,29 @@ One person runs this on one PC, with two FiveM clients, on the dev server. Clien
 ## Setup
 1. Install Night Shifts on the dev server in a folder named `night_shifts_mdt`. Install oxmysql and a database, as its install guide says.
 2. Add `ensure night_shifts_mdt` to `server.cfg`, above the `signal_radio` line.
-3. Keep `setr signal_radio_dev_profiles 1` in the dev `server.cfg`.
+3. Keep `setr signal_radio_dev_tools 1` in the dev `server.cfg`.
 4. Create the QPS and QFD departments in the MDT, each with one rank.
 5. Restart the server. The resource has new files.
 6. Start both clients in windowed mode, side by side.
-7. On B, run `/radio_dev qps`, turn the radio on and select QPS OPS 1.
+7. On B, set profile QPS, turn the radio on and select QPS OPS 1.
 
 Pass: the server console shows Night Shifts started and no `signal_radio` errors. It also prints that no departments are set.
 
+Night Shifts can refuse a second client that has the same identifier. If it refuses B, run the tests with A alone and skip the checks on B. Those checks then need a second GTA V licence.
+
+The admin panel steps are in `docs/test_core_radio.md`.
+
 ## Test 1: Read the real data
 1. On A, start a shift in QPS, with a callsign.
-2. In the server console, run `radio_ns_dump <A's server id>`.
-3. Find the `id` of each department in the output.
+2. On A, type `/radioadmin` and open the Night Shifts tab.
+3. Read the ID of each department in the Departments table.
 4. Copy the IDs into `departments` in `signal_radio/config/night_shifts.lua`. For example: `[1] = 'qps'`.
 5. Run `ensure signal_radio` in the server console.
-6. Run `radio_ns_dump <A's server id>` again.
+6. Open the Night Shifts tab again, and choose A under Shift data.
 
 Pass:
-- The shift table shows `isOnShift` as true, with `departmentId` and `callsign`.
-- The shift table has a `statusCode` field. If it does not, MDT-to-radio panic cannot work. Report the field names you see.
+- Shift data shows `isOnShift` as true, with `departmentId` and `callsign`.
+- Shift data has a `statusCode` field. If it does not, MDT-to-radio panic cannot work. Report the field names you see.
 
 ## Test 2: Start a shift
 1. On A, end the shift. Wait 5 seconds.
@@ -78,7 +82,7 @@ Record whether a panic marker appears on the MDT map. The export guide does not 
 
 Pass: A and B hear the panic tone, and B sees A's callsign. The tone plays once.
 
-If the tone does not play, run `radio_ns_dump <A's server id>` during the panic. Compare `statusCode` with `panicStatusCodes` in `config/night_shifts.lua`.
+If the tone does not play, open the Night Shifts tab during the panic and choose A. Compare `statusCode` with `panicStatusCodes` in `config/night_shifts.lua`.
 
 ## Test 8: Man-down
 If your server respawns you within 30 seconds, set `delayMs` to `1000` in `config/night_shifts.lua` for this test. Run `ensure signal_radio`. Put it back afterwards.

@@ -58,7 +58,7 @@ local function findReceivingRadios(talkgroupId, positions)
 			radios[#radios + 1] = { position = here, bucket = GetPlayerRoutingBucket(target) }
 		end
 	end)
-	-- Set only by the dev command /vp_bleedtest, because one person cannot be three players.
+	-- Set only from the admin panel's Test tools, because one person cannot be three players.
 	if BleedTestRadio then
 		radios[#radios + 1] = { position = BleedTestRadio }
 	end

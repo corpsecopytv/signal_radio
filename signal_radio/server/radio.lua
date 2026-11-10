@@ -240,6 +240,7 @@ function RefreshSession(source)
 			callsign = callsignFor(source, profile),
 			mdtCallsign = profile ~= nil and profile.callsign ~= nil,
 			profileKey = profileKeyFor(profile),
+			department = profile and profile.department or nil,
 			priority = IsPlayerAceAllowed(source, 'radio.priority'),
 			lastPanic = nil,
 			panicUntil = 0,

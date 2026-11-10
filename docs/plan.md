@@ -24,7 +24,7 @@ Working resource name: `signal_radio`. The handsets use product photos of the Mo
 - The resource folder must be named `night_shifts_mdt`. Calls use the colon form: `exports['night_shifts_mdt']:ExportName(...)`.
 - `GetUserShiftData(source)` gives the shift state, department and callsign, plus postal, street and zone.
 - The guide documents no event for a shift, status or panic change. The radio reads every player's shift each 5 seconds. No Night Shifts file changes, so an update cannot overwrite a hook.
-- `config/night_shifts.lua` maps each Night Shifts department ID to a codeplug. The `radio_ns_dump` console command prints the IDs and one player's shift.
+- `config/night_shifts.lua` maps each Night Shifts department ID to a codeplug. The Night Shifts tab in the admin panel shows the IDs and one player's shift.
 - A player on a department with no mapping gets the civilian radio.
 - Senior ranks are not decided. A shift does not give the command channel yet. TODO: confirm in Night Shifts docs: the rank field in `GetUserShiftData`.
 - The radio keeps working when Night Shifts is stopped or a read fails. It keeps each player's current radio until a read succeeds.
@@ -39,17 +39,17 @@ resources/[voice]/pma-voice            patched from patches/signal_radio.patch i
 resources/[radio]/signal_radio/
   fxmanifest.lua
   config/    talkgroups.lua, codeplugs.lua, towers.lua, night_shifts.lua
-  server/    bridge, registry, permissions, radio, transmit, towers, bleed, voice_proof
-  client/    radio, ptt, audio, signal, towers, voice_proof
-  web/       handset/ with skins/   (plain JS, no build step)
+  server/    bridge, registry, permissions, radio, transmit, towers, bleed, admin
+  client/    radio, ptt, audio, signal, towers, admin
+  web/       handset/ with skins/, admin/   (plain JS, no build step)
 ```
 
-Later steps add `web/dispatch/`, staff tools and optional GPS. `voice_proof` holds dev-only test commands. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
+Later steps add `web/dispatch/`, staff tools and optional GPS. `web/handset/compare.html` previews the skins in a browser and does not ship to the game.
 
 No database. Config lives in Lua files. Callsigns, scan choices, the tower list and tower sabotage timers live in server KVP. Handset position and volume live in client KVP.
 
 ### Permissions
-- The codeplug comes from the Night Shifts department, through `server/bridge.lua`. On a dev server, a `/radio_dev` profile takes priority over a shift.
+- The codeplug comes from the Night Shifts department, through `server/bridge.lua`. On a dev server, a test profile from the admin panel takes priority over a shift.
 - A codeplug defines the skin, zones and starting scan list. Later steps add panic behaviour and optional GPS visibility.
 - ACE is used only for `radio.admin`, `radio.priority` and `radio.dispatch`.
 - On shift, the callsign comes from the MDT and `/callsign` is blocked. Off shift, `/callsign` sets the callsign and saves it in server KVP. A shift with no MDT callsign also uses the saved one.
@@ -116,7 +116,7 @@ Civilians can use the radio as well as the four emergency departments. A civilia
   - No pma-voice change is needed. During traffic, the server adds nearby players as audio listeners on the channel, and removes them when they move away or the traffic ends.
   - Mumble plays the voice from the talker, not from the radio. Volume and muffling stand in for the radio's position.
   - Speaker bleed includes encrypted talkgroups, because the receiving radio has already decoded the audio. Anyone beside that radio can overhear it.
-- **Towers:** Replicated from the server. `/radio_tower` adds, removes, resizes, clears and lists towers, and needs `radio.admin`. `/radio_tower_debug` shows each radius on the map. `config/towers.lua` holds nine placeholder sites. TODO: replace them with real sites. Place towers so coverage overlaps. One sabotaged tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
+- **Towers:** Replicated from the server. The admin panel adds, removes, resizes, clears and lists towers, and shows each radius on the map. `config/towers.lua` holds nine placeholder sites. TODO: replace them with real sites. Place towers so coverage overlaps. One sabotaged tower degrades a zone but does not remove all coverage. RFSQ rural areas have coverage from more than one tower.
 - **Sabotage:** Sabotage needs no item. Any player can walk up to a tower and press E at its marker. The player then stays in an animation for 120 seconds before the sabotage takes effect. The server records the start time, and on completion checks that 120 seconds have passed and the player is still at the tower. Moving away, dying or cancelling stops the sabotage, and no cooldown starts. Only one player can sabotage a tower at a time. Once the sabotage takes effect, the tower is offline for 5 minutes, then recovers automatically. That tower cannot be sabotaged again for 30 minutes, counted from when the sabotage took effect. All three times are set in `config/towers.lua`. Expiry and cooldown are saved as timestamps, so a server restart does not clear them. Units and dispatch see the tower go offline. `radio.admin` can clear a sabotage. Every sabotage is logged (who, which tower, when) and sends an alert to online staff.
 - **Fireground channel:** One short-range simplex talkgroup in the RFSQ zone, with a 500 metre range set in `config/talkgroups.lua`. It works without a tower and ignores signal tiers. It has the same 500 metre range as direct radio, but keeps full quality across that range. Only players within a configurable distance hear each other. The per-talker resolver mutes talkers past that distance, using the server's distance beyond the game's streaming range.
 - **Emergency:** Panic with cooldown, tone on the talkgroup and priority for the sender. Man-down alert after a configurable delay.
@@ -130,7 +130,14 @@ Civilians can use the radio as well as the four emergency departments. A civilia
 - **Skins:** QPS and QAS use the APX 2000. QFD and RFSQ use the APX 8000XE in hi-vis. Civilians use the UV-5R. Each codeplug sets its skin in `config/codeplugs.lua`.
 - **Dispatch console (`/dispatch`, `radio.dispatch`):** Transmit on a selected talkgroup and monitor others. Tone-outs, talkgroup patching, moving a unit, and a transmission log (who, where, when, with no audio recording).
 - **Emergency frequency mode:** Every emergency radio has every zone. The Zone list also has a Frequency option. In frequency mode, an emergency radio tunes by frequency like a civilian radio, and can talk to civilians on a clear frequency. Dialling an emergency frequency joins that talkgroup with clear audio. A command frequency stays encrypted for radios that are not senior. Scan pauses in frequency mode. Choosing a zone returns the radio to zone mode.
-- **Staff tools:** Admin commands force a player off a channel, clear a stuck talker and dump channel state to the console.
+- **Admin panel (`/radioadmin`, `radio.admin`):** One screen replaces every dev and admin command. Only `/radio` and `/callsign` remain as player commands.
+  - The server checks `radio.admin` on every request. A player without it gets no response.
+  - Radios lists each player's ID, callsign, radio, channel and signal.
+  - Towers adds a tower at the admin's position, sets a radius, clears a sabotage and removes a tower. It also shows each radius on the map.
+  - Night Shifts shows whether the MDT runs, each department's ID and radio, and one player's shift data.
+  - Test tools appears only when the server sets `signal_radio_dev_tools 1`. It sets a test profile, runs a timed transmit, moves the admin, places a test radio for speaker bleed and watches a talker's voice.
+  - Player names and MDT data reach the page only as text, so a crafted name cannot run code in the panel.
+- **Staff tools:** Hardening adds forcing a player off a channel and clearing a stuck talker to the admin panel.
 - **Encrypted talkgroups:**
   - Purpose: Encryption keeps emergency services traffic private from civilian radios (see Civilian use).
   - Every talkgroup in `config/talkgroups.lua` is encrypted. A radio that can use a talkgroup holds its key and hears clear audio.
@@ -154,7 +161,7 @@ setr voice_onClickVolume 0
 setr voice_offClickVolume 0
 setr voice_disableAutomaticListenerOnCamera 1
 ```
-OneSync must be on. The dev server also uses `setr signal_radio_dev_profiles 1` and `setr signal_radio_voice_proof 1`. Never set these on the live server.
+OneSync must be on. The dev server also uses `setr signal_radio_dev_tools 1`. Never set this on the live server.
 
 ## Build order
 1. **Voice proof:** Apply the pma-voice patch on a separate dev server. Prove listen-only audio and per-talker submixes with test commands.
@@ -181,6 +188,7 @@ Status at 2026-11-10.
 | 7. Towers | Working in-game. Built ahead of steps 4 and 6. |
 | 8. Direct radio and speaker bleed | Built. Waiting on the in-game test in `docs/test_towers.md`. |
 | 9. Hardening | Not started. |
+| Admin panel | Built and logic-tested. Waiting on the in-game test in `docs/test_admin_panel.md`. |
 
 Emergency frequency mode, all-zone access and chosen scan lists are built as part of steps 2, 3 and 5. The in-game test for this build is `docs/test_core_radio.md`.
 
@@ -224,7 +232,9 @@ Static checks can run during the build: Lua syntax, and NUI in a browser with mo
 - The radio keeps working when Night Shifts stops.
 - Sabotaging one tower leaves some coverage from an overlapping tower. Staff get a sabotage alert.
 - On the fireground channel, players within range hear each other with no tower, and players out of range do not.
-- Staff commands clear a stuck talker and remove a player from a channel.
+- The admin panel clears a stuck talker and removes a player from a channel.
+- A player without `radio.admin` cannot open the admin panel or trigger its actions.
+- Test tools do not appear unless the server sets `signal_radio_dev_tools 1`.
 - On an encrypted talkgroup, a player with the key hears clear audio. A player without the key hears only the noise loop, sees "ENC" with no talker name, and cannot transmit.
 - A keyless listener's client receives no voice from the encrypted talkgroup. Confirm this in the Mumble debug output, not only by ear. Keep the two players outside proximity range for this test.
 - Run one load test with 10 or more players on the dev server before launch.

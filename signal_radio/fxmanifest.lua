@@ -23,7 +23,7 @@ server_scripts {
 	'server/transmit.lua',
 	'server/towers.lua',
 	'server/bleed.lua',
-	'server/voice_proof.lua',
+	'server/admin.lua',
 }
 
 client_scripts {
@@ -32,7 +32,7 @@ client_scripts {
 	'client/audio.lua',
 	'client/signal.lua',
 	'client/towers.lua',
-	'client/voice_proof.lua',
+	'client/admin.lua',
 }
 
 ui_page 'web/handset/index.html'
@@ -46,4 +46,6 @@ files {
 	'web/handset/skins/apx2000_hd.png',
 	'web/handset/skins/apx8000xe_fire_hd.png',
 	'web/handset/skins/uv5r.webp',
+	'web/admin/admin.css',
+	'web/admin/admin.js',
 }

@@ -64,6 +64,11 @@ local function setHandsetOpen(open)
 	end
 end
 
+--- Puts the handset away, so another screen can take focus.
+function CloseHandset()
+	if handsetOpen then setHandsetOpen(false) end
+end
+
 RegisterCommand('radio', function()
 	setHandsetOpen(not handsetOpen)
 end, false)

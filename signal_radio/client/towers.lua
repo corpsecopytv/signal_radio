@@ -135,11 +135,12 @@ CreateThread(function()
 	end
 end)
 
-RegisterCommand('radio_tower_debug', function()
+--- Shows or hides each tower's radius on the map. Returns whether they now show.
+function ToggleTowerRadii()
 	debugEnabled = not debugEnabled
 	drawDebugBlips()
-	notify(debugEnabled and 'Tower radius shown on the map.' or 'Tower radius hidden.')
-end, false)
+	return debugEnabled
+end
 
 AddEventHandler('onResourceStop', function(resource)
 	if resource == GetCurrentResourceName() then
