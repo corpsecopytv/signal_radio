@@ -9,10 +9,10 @@ Config.NightShifts = {
 	-- Maps each Night Shifts department ID to a codeplug in config/codeplugs.lua.
 	-- A player on a department that is not listed gets a civilian radio.
 	departments = {
-		-- [1] = 'qps',
-		-- [2] = 'qas',
-		-- [3] = 'qfd',
-		-- [4] = 'rfsq',
+		 [9] = 'qps',
+		 [11] = 'qas',
+		 [10] = 'qfd',
+		 [8] = 'rfsq',
 	},
 
 	-- TODO: confirm in Night Shifts docs: the status code that the panic binding sets.
