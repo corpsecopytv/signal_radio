@@ -1,8 +1,14 @@
 -- The radio admin panel. Every request checks the radio.admin ACE here on the server.
 
+local refusalLogged = {}
+
 local function isAdmin(source)
 	return IsPlayerAceAllowed(source, 'radio.admin')
 end
+
+AddEventHandler('playerDropped', function()
+	refusalLogged[source] = nil
+end)
 
 local function playerRows()
 	local rows = {}
@@ -62,7 +68,17 @@ end
 
 RegisterNetEvent('signal_radio:adminOpen', function()
 	local source = source
-	if not isAdmin(source) then return end
+	if not isAdmin(source) then
+		TriggerClientEvent('signal_radio:adminRefused', source)
+		-- One console line per player is enough to find the identifier, and stops a player filling the console.
+		if not refusalLogged[source] then
+			refusalLogged[source] = true
+			local license = GetPlayerIdentifierByType(source, 'license') or 'license:unknown'
+			print(('[signal_radio] %s (player %d) tried /radioadmin without radio.admin. To allow them, add this line to server.cfg: add_ace identifier.%s radio.admin allow')
+				:format(GetPlayerName(source) or '?', source, license))
+		end
+		return
+	end
 	TriggerClientEvent('signal_radio:adminSnapshot', source, buildSnapshot(source), true)
 end)
 

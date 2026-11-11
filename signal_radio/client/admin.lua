@@ -141,6 +141,10 @@ RegisterNetEvent('signal_radio:adminSnapshot', function(snapshot, open)
 	if panelOpen then SendToHandset('adminSnapshot', { snapshot = snapshot }) end
 end)
 
+RegisterNetEvent('signal_radio:adminRefused', function()
+	say('You need the radio.admin permission. The server console shows the line to add.')
+end)
+
 RegisterNetEvent('signal_radio:adminResult', function(ok, message)
 	if panelOpen then SendToHandset('adminNote', { message = message, failed = not ok }) end
 end)

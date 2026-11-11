@@ -30,7 +30,7 @@ Pass:
 - The game takes no key presses while the panel is open.
 - Esc and Close both close it, and you can move again.
 
-Optional: remove the `add_ace` line, restart the server and type `/radioadmin`. Pass: nothing opens. Put the line back.
+Optional: remove the `add_ace` line, restart the server and type `/radioadmin`. Pass: nothing opens, chat says you need the radio.admin permission, and the server console shows an `add_ace` line with your license. Put the line back.
 
 ## Test 2: Old commands are gone
 On A, type each of these: `/radio_dev qps`, `/radio_tower list`, `/radio_tower_debug`, `/vp_goto 0 0`, `/radio_ns_dump`.

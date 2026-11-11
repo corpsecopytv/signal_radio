@@ -52,7 +52,7 @@ function GetRadioProfile(source)
 	if not department or not Config.Codeplugs[department] then
 		if departmentId and not reportedDepartments[departmentId] then
 			reportedDepartments[departmentId] = true
-			print(('[signal_radio] Night Shifts department %d has no codeplug in config/night_shifts.lua.'):format(departmentId))
+			print(('^3[signal_radio] A player is on shift in Night Shifts department %d, which has no codeplug in config/night_shifts.lua. They get a civilian radio.^7'):format(departmentId))
 		end
 		return nil, true
 	end
@@ -130,6 +130,25 @@ function SendMdtManDown(source, callsign)
 	return ok
 end
 
+--- @return table departments { id, name, codeplug } sorted by ID
+local function readDepartments()
+	local list = {}
+	if not isMdtStarted() then return list end
+	local ok, departments = pcall(function()
+		return exports[MDT]:GetDepartments()
+	end)
+	for _, department in ipairs(ok and type(departments) == 'table' and departments or {}) do
+		local id = tonumber(department.id)
+		list[#list + 1] = {
+			id = id,
+			name = department.departmentName,
+			codeplug = id and settings.departments[id] or nil,
+		}
+	end
+	table.sort(list, function(a, b) return (a.id or 0) < (b.id or 0) end)
+	return list
+end
+
 --- Night Shifts has no shift events, so the radio checks each player on a timer.
 function CheckNightShifts()
 	if not isMdtStarted() then return end
@@ -153,7 +172,11 @@ CreateThread(function()
 	if not isMdtStarted() then
 		print('[signal_radio] Night Shifts is not running, so players with no test profile get a civilian radio.')
 	elseif next(settings.departments) == nil then
-		print('[signal_radio] No departments are set in config/night_shifts.lua. The Night Shifts tab in /radioadmin shows their IDs.')
+		print('^3[signal_radio] No departments are set in config/night_shifts.lua, so every player gets a civilian radio.^7')
+		print('[signal_radio] Night Shifts has these department IDs:')
+		for _, department in ipairs(readDepartments()) do
+			print(('[signal_radio]   %s = %s'):format(tostring(department.id), tostring(department.name)))
+		end
 	end
 	while true do
 		CheckNightShifts()
@@ -163,21 +186,8 @@ end)
 
 --- The Night Shifts details for the admin panel.
 function GetNightShiftsInfo(target)
-	local info = { running = isMdtStarted(), departments = {} }
+	local info = { running = isMdtStarted(), departments = readDepartments() }
 	if not info.running then return info end
-
-	local ok, departments = pcall(function()
-		return exports[MDT]:GetDepartments()
-	end)
-	for _, department in ipairs(ok and type(departments) == 'table' and departments or {}) do
-		local id = tonumber(department.id)
-		info.departments[#info.departments + 1] = {
-			id = id,
-			name = department.departmentName,
-			codeplug = id and settings.departments[id] or nil,
-		}
-	end
-	table.sort(info.departments, function(a, b) return (a.id or 0) < (b.id or 0) end)
 	info.shift = readShift(target)
 	return info
 end
