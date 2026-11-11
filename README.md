@@ -15,6 +15,18 @@ The full design and build status are in [docs/plan.md](docs/plan.md). The voice 
 
 pma-voice, Night Shifts MDT and `server.cfg` are never committed to this repo.
 
+## Install on a server
+1. Use pma-voice 7.0.1. From inside the pma-voice folder, apply the patch:
+
+```
+git apply --ignore-whitespace path/to/signal_radio.patch
+```
+
+2. Restart the server.
+3. Check the server console. A red `signal_radio` error means pma-voice has no patch. Radios stay off until you apply it. A yellow warning means pma-voice has the earlier patch only. Apply `patches/signal_radio_upgrade_1.patch` to fix it.
+
+Each server needs its own patched copy of pma-voice. A pma-voice update removes the patch, so apply it again after each update.
+
 ## Dev server setup
 The radio reads shifts from Night Shifts MDT. Set your department IDs in `signal_radio/config/night_shifts.lua`. On a dev server, a test profile can stand in for a shift. This line adds the Test tools tab to the admin panel. Add it to the dev `server.cfg` only:
 

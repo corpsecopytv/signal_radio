@@ -1,4 +1,4 @@
-local pma = exports['pma-voice']
+local pma = Pma
 
 -- Shared with client/ptt.lua
 Radio = {

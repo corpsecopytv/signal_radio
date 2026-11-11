@@ -1,4 +1,4 @@
-local pma = exports['pma-voice']
+local pma = Pma
 
 -- pma-voice ignores talk events while a disable bit is set, so this bit is only pulsed.
 -- A held bit could lose another talker's stop event and leave them stuck on radio audio.

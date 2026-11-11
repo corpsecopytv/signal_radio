@@ -49,7 +49,7 @@ end
 function SendState(source)
 	local session = Sessions[source]
 	if not session then
-		return TriggerClientEvent('signal_radio:state', source, { available = false })
+		return TriggerClientEvent('signal_radio:state', source, { available = false, needsPatch = not PmaPatched })
 	end
 	TriggerClientEvent('signal_radio:state', source, {
 		available = true,
@@ -224,7 +224,7 @@ function RefreshSession(source)
 	end
 	local license = identifierFor(source)
 	local scanKey = not codeplug.civilian and license and ('scan:%s:%s'):format(license, profile.department) or nil
-	if canUseRadio(source) then
+	if PmaPatched and canUseRadio(source) then
 		Sessions[source] = {
 			source = source,
 			codeplug = codeplug,

@@ -16,6 +16,7 @@ shared_scripts {
 }
 
 server_scripts {
+	'server/pma_check.lua',
 	'server/bridge.lua',
 	'server/registry.lua',
 	'server/permissions.lua',
@@ -27,6 +28,7 @@ server_scripts {
 }
 
 client_scripts {
+	'client/pma.lua',
 	'client/radio.lua',
 	'client/ptt.lua',
 	'client/audio.lua',

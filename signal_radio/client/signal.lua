@@ -1,4 +1,4 @@
-local pma = exports['pma-voice']
+local pma = Pma
 
 local BARS_FOR_TIER = { full = 4, worn = 2, bad = 1, none = 0 }
 local talkgroupsById, talkgroupsByChannel = {}, {}

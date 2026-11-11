@@ -396,7 +396,7 @@ function render() {
 	message.replaceChildren();
 	if (!state.available) {
 		message.hidden = false;
-		message.textContent = 'Radio unavailable.';
+		message.textContent = state.needsPatch ? 'Radio offline. Ask staff to patch pma-voice.' : 'Radio unavailable.';
 	} else if (app.alert && on) {
 		message.hidden = false;
 		const title = document.createElement('strong');

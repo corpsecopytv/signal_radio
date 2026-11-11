@@ -1,4 +1,4 @@
-local pma = exports['pma-voice']
+local pma = Pma
 
 -- Starting values. Tune these by ear with real voices.
 local SUBMIX_PARAMS = {
